@@ -2,19 +2,33 @@
 
 module AgentRuntime
   class Planner
-    def initialize(client:, schema:, prompt_builder:)
+    def initialize(client:, schema: nil, prompt_builder: nil)
       @client = client
       @schema = schema
       @prompt_builder = prompt_builder
     end
 
+    # PLAN state: Single-shot planning using /generate
+    # Returns structured plan, never loops
     def plan(input:, state:)
-      raw = @client.generate(
-        prompt: @prompt_builder.call(input: input, state: state),
-        schema: @schema
-      )
+      raise ExecutionError, "Planner requires schema and prompt_builder for plan" unless @schema && @prompt_builder
+
+      prompt = @prompt_builder.call(input: input, state: state)
+      raw = @client.generate(prompt: prompt, schema: @schema)
 
       Decision.new(**raw.transform_keys(&:to_sym))
+    end
+
+    # EXECUTE state: Chat-based execution using /chat
+    # Returns content by default (for simple responses)
+    def chat(messages:, tools: nil, **kwargs)
+      @client.chat(messages: messages, tools: tools, allow_chat: true, **kwargs)
+    end
+
+    # EXECUTE state: Chat with full response (for tool calling)
+    # Returns full response including tool_calls
+    def chat_raw(messages:, tools: nil, **kwargs)
+      @client.chat_raw(messages: messages, tools: tools, allow_chat: true, **kwargs)
     end
   end
 end
