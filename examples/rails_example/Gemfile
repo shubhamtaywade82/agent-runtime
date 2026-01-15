@@ -1,0 +1,12 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gem "rails", "~> 7.0"
+gem "agent_runtime", path: "../../"
+gem "ollama-client", ">= 0.1.0"
+
+group :development, :test do
+  gem "rspec-rails"
+  gem "rubocop"
+end

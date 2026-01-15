@@ -13,7 +13,7 @@ module AgentRuntime
       else
         @tools.call(decision.action, decision.params || {})
       end
-    rescue => e
+    rescue StandardError => e
       raise ExecutionError, e.message
     end
   end
