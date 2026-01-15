@@ -10,4 +10,6 @@ module AgentRuntime
   class ToolNotFound < Error; end
 
   class ExecutionError < Error; end
+
+  class MaxIterationsExceeded < ExecutionError; end
 end

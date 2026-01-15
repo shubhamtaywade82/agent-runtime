@@ -16,6 +16,9 @@ module AgentRuntime
   class ExecutionError < Error
   end
 
+  class MaxIterationsExceeded < ExecutionError
+  end
+
   Decision: singleton(Struct.new(:action, :params, :confidence, keyword_init: true))
 
   class State
@@ -49,7 +52,8 @@ module AgentRuntime
   end
 
   class Agent
-    def initialize: (Planner planner:, Policy policy:, Executor executor:, State state:, ?AuditLog audit_log) -> void
+    def initialize: (Planner planner:, Policy policy:, Executor executor:, State state:, ?AuditLog audit_log, ?Integer max_iterations) -> void
     def step: (String input:) -> Hash[untyped, untyped]
+    def run: (String initial_input:, ?Proc input_builder) -> Hash[untyped, untyped]
   end
 end
