@@ -4,8 +4,41 @@
 require "bundler/setup"
 require "agent_runtime"
 
+# Load console helpers for easier testing
+# Use: check_ollama, build_test_agent, test_agent
+require_relative "../lib/console_helpers"
+
+# Load DhanHQ helpers (optional - only if DhanHQ is available)
+begin
+  require_relative "../lib/dhanhq_console_helpers"
+rescue LoadError, StandardError => e
+  # DhanHQ helpers not available - that's okay
+end
+
+# Include helpers in main scope for console use
+include ConsoleHelpers
+include DhanHQConsoleHelpers if defined?(DhanHQConsoleHelpers)
+
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
+
+# Print helpful info
+puts "\n" + "=" * 60
+puts "agent_runtime Console"
+puts "=" * 60
+puts "\nQuick start:"
+puts "  1. agent = build_test_agent"
+puts "  2. test_agent(agent, 'Fetch market data for AAPL')"
+puts "\nIndian markets (DhanHQ - real):"
+puts "  1. indian_agent = build_indian_market_agent"
+puts "  2. test_agent(indian_agent, 'Get LTP of RELIANCE')"
+puts "\nDhanHQ (Indian markets - real):"
+puts "  1. dhan_agent = build_dhanhq_agent"
+puts "  2. test_dhanhq_agent(dhan_agent, 'Get LTP of RELIANCE')"
+puts "\nOr load example:"
+puts "  load 'examples/fixed_console_example.rb'"
+puts "\nSee CONSOLE_TESTING.md for more examples"
+puts "=" * 60 + "\n\n"
 
 require "irb"
 IRB.start(__FILE__)

@@ -11,3 +11,7 @@ gem "rake", "~> 13.0"
 gem "rspec", "~> 3.0"
 
 gem "rubocop", "~> 1.21"
+
+# DhanHQ integration for Indian market data (development only)
+gem "DhanHQ", git: "https://github.com/shubhamtaywade82/dhanhq-client.git", branch: "main", group: :development
+gem "dotenv", group: :development

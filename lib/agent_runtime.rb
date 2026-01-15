@@ -2,6 +2,7 @@
 
 require "ollama_client"
 
+require_relative "agent_runtime/version"
 require_relative "agent_runtime/agent"
 require_relative "agent_runtime/agent_fsm"
 require_relative "agent_runtime/planner"
