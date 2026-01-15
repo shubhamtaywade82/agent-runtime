@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "agent/runtime"
+require "agent_runtime"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

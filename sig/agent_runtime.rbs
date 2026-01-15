@@ -1,0 +1,57 @@
+module AgentRuntime
+  VERSION: String
+
+  class Error < StandardError
+  end
+
+  class PolicyViolationError < Error
+  end
+
+  class InvalidDecisionError < Error
+  end
+
+  class UnknownActionError < Error
+  end
+
+  class ToolNotFoundError < Error
+  end
+
+  Decision: singleton(Struct.new(:action, :params, :confidence, keyword_init: true))
+
+  class State
+    def initialize: (?Hash[untyped, untyped] data) -> void
+    def snapshot: () -> Hash[untyped, untyped]
+    def apply: (Hash[untyped, untyped] result) -> void
+  end
+
+  class ToolRegistry
+    def initialize: (?Hash[String, Proc] tools) -> void
+    def call: (String action, Hash[untyped, untyped] params) -> untyped
+    def register: (String name, Proc tool) -> void
+  end
+
+  class Planner
+    def initialize: (untyped client, Hash[untyped, untyped] schema) -> void
+    def plan: (String input:, Hash[untyped, untyped] state:) -> Decision
+  end
+
+  class Policy
+    def initialize: (?Array[String] allowed_actions, ?Float min_confidence) -> void
+    def validate!: (Decision decision, State state:) -> void
+  end
+
+  class Executor
+    def initialize: (ToolRegistry tool_registry:) -> void
+    def execute: (Decision decision, State state:) -> Hash[untyped, untyped]
+  end
+
+  class AuditLog
+    def initialize: (?IO output) -> void
+    def record: (untyped input, Decision decision, Hash[untyped, untyped] result) -> void
+  end
+
+  class Agent
+    def initialize: (Planner planner:, Executor executor:, Policy policy:, State state:, ?AuditLog audit) -> void
+    def step: (String input:) -> Hash[untyped, untyped]
+  end
+end

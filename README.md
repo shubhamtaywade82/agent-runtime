@@ -1,43 +1,194 @@
-# Agent::Runtime
+# AgentRuntime
 
-TODO: Delete this and the text below, and describe your gem
+> A **deterministic, policy-driven runtime** for building safe, tool-using LLM agents.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/agent/runtime`. To experiment with that code, run `bin/console` for an interactive prompt.
+AgentRuntime is a domain-agnostic agent runtime that provides explicit state management, policy enforcement, and tool execution for LLM-based agents. It separates reasoning (LLM) from authority (Ruby) and gates all side effects.
+
+## Philosophy
+
+AgentRuntime is **not another "agent framework"**. It's a reusable, deterministic runtime where:
+
+* **LLM = reasoning only** (stateless planning)
+* **Ruby = authority** (policy enforcement)
+* **Side effects = gated** (tool registry)
+* **State = explicit** (serializable, visible)
+* **Failures = visible** (audit log, clear errors)
+
+## Architecture
+
+```
+┌────────────────────────────┐
+│  Your Application          │  ← trading, code patching, infra, CI, etc.
+├────────────────────────────┤
+│  Agent Runtime             │  ← planner + policy + executor + state
+├────────────────────────────┤
+│  ollama-client             │  ← safe LLM calls, schemas, retries
+├────────────────────────────┤
+│  Ollama Server             │  ← models, inference
+└────────────────────────────┘
+```
+
+## Core Abstractions
+
+The framework provides minimal but complete primitives:
+
+* **Agent** - Orchestrates the execution loop
+* **Planner** - Stateless LLM reasoning (uses `ollama-client`)
+* **Policy** - Hard constraints, Ruby-only (non-negotiable safety)
+* **ToolRegistry** - What can be executed
+* **Executor** - Tool execution loop
+* **State** - Explicit, serializable state
+* **AuditLog** - Optional but critical for debugging
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add this line to your application's Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+gem "agent-runtime"
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+And then execute:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle install
+```
+
+Or install it yourself as:
+
+```bash
+gem install agent-runtime
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+### Basic Example
+
+```ruby
+require "agent_runtime"
+require "ollama"
+
+# 1. Set up tools
+tools = AgentRuntime::ToolRegistry.new({
+  "fetch" => ->(**args) { fetch_data(args) },
+  "execute" => ->(**args) { perform_action(args) }
+})
+
+# 2. Configure planner (uses ollama-client)
+client = Ollama::Client.new
+schema = {
+  "action" => "string",
+  "params" => "object",
+  "confidence" => "number"
+}
+planner = AgentRuntime::Planner.new(client: client, schema: schema)
+
+# 3. Define policy
+policy = AgentRuntime::Policy.new(
+  allowed_actions: %w[fetch execute finish],
+  min_confidence: 0.7
+)
+
+# 4. Initialize state
+state = AgentRuntime::State.new
+
+# 5. Create agent
+agent = AgentRuntime::Agent.new(
+  planner: planner,
+  executor: AgentRuntime::Executor.new(tool_registry: tools),
+  policy: policy,
+  state: state,
+  audit: AgentRuntime::AuditLog.new
+)
+
+# 6. Run agent
+result = agent.step(input: "Fetch market data for AAPL")
+```
+
+### How It Works
+
+1. **Planner** receives input and current state, calls LLM to generate a decision
+2. **Policy** validates the decision (confidence, allowed actions)
+3. **Executor** runs the appropriate tool
+4. **State** is updated with the result
+5. **AuditLog** records everything (if enabled)
+
+### Key Principles
+
+#### Stateless Planning
+The planner never mutates state. It's a pure function that takes input and state, returns a decision.
+
+#### Policy Enforcement
+LLM cannot override policy. Policy failures stop execution immediately.
+
+#### Explicit State
+No hidden memory. State is always visible, serializable, and testable.
+
+#### Tool Isolation
+Tools are deterministic, testable, and side-effecting (intentionally).
+
+## Examples
+
+See the `examples/` directory for complete implementations:
+
+* **Trading Agent** - Market data and trade execution
+* **Patch Agent** - Code refactoring and patching
+* **Infra Agent** - Infrastructure automation
+
+## What AgentRuntime Is NOT
+
+This framework intentionally avoids:
+
+❌ Domain logic
+❌ Broker APIs
+❌ Git logic
+❌ HTTP clients
+❌ Storage decisions
+❌ Hardcoded prompts
+
+The framework only defines **HOW agents run**, not **WHAT they do**.
+
+## Why This Is Reusable
+
+| Property           | AgentRuntime | Typical Agent Framework |
+| ------------------ | ------------ | ----------------------- |
+| Stateless planning | ✅            | ❌                       |
+| Explicit state     | ✅            | ❌                       |
+| Policy gate        | ✅            | ❌                       |
+| Tool isolation     | ✅            | ❌                       |
+| Deterministic      | ✅            | ❌                       |
+| Auditable          | ✅            | ❌                       |
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```bash
+bin/setup
+```
+
+To run tests:
+
+```bash
+rake spec
+```
+
+To run the console:
+
+```bash
+bin/console
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/agent-runtime. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/agent-runtime/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome. This project follows Clean Ruby principles:
+
+* Code must be readable, straightforward, and easy to change
+* Optimize for human understanding over cleverness
+* Prefer simple solutions (K.I.S.S) over complex abstractions
+* Methods must do one thing only
+* Classes must have a single, clear responsibility
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the Agent::Runtime project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/agent-runtime/blob/master/CODE_OF_CONDUCT.md).
+The gem is available as open source under the terms of the [MIT License](LICENSE.txt).
