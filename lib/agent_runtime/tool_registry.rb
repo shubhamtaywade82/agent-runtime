@@ -7,12 +7,10 @@ module AgentRuntime
     end
 
     def call(action, params)
-      tool = @tools.fetch(action) { raise ToolNotFoundError, "Tool not found: #{action}" }
-      tool.call(**params)
-    end
+      tool = @tools[action]
+      raise ToolNotFound, "Tool not found: #{action}" unless tool
 
-    def register(name, tool)
-      @tools[name] = tool
+      tool.call(**params)
     end
   end
 end

@@ -4,22 +4,13 @@ require "json"
 
 module AgentRuntime
   class AuditLog
-    def initialize(output: $stdout)
-      @output = output
-    end
-
-    def record(input, decision, result)
-      entry = {
+    def record(input:, decision:, result:)
+      puts({
+        time: Time.now.utc.iso8601,
         input: input,
-        decision: {
-          action: decision.action,
-          params: decision.params,
-          confidence: decision.confidence
-        },
-        result: result,
-        time: Time.now.iso8601
-      }
-      @output.puts(entry.to_json)
+        decision: decision.to_h,
+        result: result
+      }.to_json)
     end
   end
 end

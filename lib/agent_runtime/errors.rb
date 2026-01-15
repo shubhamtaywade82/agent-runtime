@@ -3,11 +3,11 @@
 module AgentRuntime
   class Error < StandardError; end
 
-  class PolicyViolationError < Error; end
+  class PolicyViolation < Error; end
 
-  class InvalidDecisionError < Error; end
+  class UnknownAction < Error; end
 
-  class UnknownActionError < Error; end
+  class ToolNotFound < Error; end
 
-  class ToolNotFoundError < Error; end
+  class ExecutionError < Error; end
 end

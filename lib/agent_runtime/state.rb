@@ -10,8 +10,10 @@ module AgentRuntime
       @data.dup
     end
 
-    def apply(result)
-      @data.merge!(result) if result.is_a?(Hash)
+    def apply!(result)
+      return unless result.is_a?(Hash)
+
+      @data.merge!(result)
     end
   end
 end

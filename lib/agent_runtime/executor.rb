@@ -8,13 +8,13 @@ module AgentRuntime
 
     def execute(decision, state:)
       case decision.action
-      when "fetch", "execute", "analyze"
-        @tools.call(decision.action, decision.params)
       when "finish"
         { done: true }
       else
-        raise UnknownActionError, "Unknown action: #{decision.action}"
+        @tools.call(decision.action, decision.params || {})
       end
+    rescue => e
+      raise ExecutionError, e.message
     end
   end
 end

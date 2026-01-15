@@ -2,24 +2,31 @@
 
 module AgentRuntime
   class Agent
-    def initialize(planner:, executor:, policy:, state:, audit: nil)
+    def initialize(planner:, policy:, executor:, state:, audit_log: nil)
       @planner = planner
-      @executor = executor
       @policy = policy
+      @executor = executor
       @state = state
-      @audit = audit
+      @audit_log = audit_log
     end
 
     def step(input:)
-      decision = @planner.plan(input: input, state: @state.snapshot)
+      decision = @planner.plan(
+        input: input,
+        state: @state.snapshot
+      )
 
       @policy.validate!(decision, state: @state)
 
       result = @executor.execute(decision, state: @state)
 
-      @state.apply(result)
+      @state.apply!(result)
 
-      @audit&.record(input, decision, result)
+      @audit_log&.record(
+        input: input,
+        decision: decision,
+        result: result
+      )
 
       result
     end
