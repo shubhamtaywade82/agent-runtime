@@ -3,6 +3,7 @@
 require "spec_helper"
 require "json"
 
+# rubocop:disable RSpec/MultipleMemoizedHelpers
 RSpec.describe AgentRuntime::AgentFSM do
   let(:mock_planner) { instance_double(AgentRuntime::Planner) }
   let(:mock_policy) { instance_double(AgentRuntime::Policy) }
@@ -75,7 +76,7 @@ RSpec.describe AgentRuntime::AgentFSM do
   end
 
   describe "#run" do
-    context "successful workflow to FINALIZE" do
+    context "when workflow completes successfully" do
       it "completes workflow from INTAKE to FINALIZE" do
         # INTAKE -> PLAN
         plan_decision = AgentRuntime::Decision.new(
@@ -95,11 +96,10 @@ RSpec.describe AgentRuntime::AgentFSM do
           }
         }
 
-        allow(mock_planner).to receive(:plan).and_return(plan_decision)
-        allow(mock_planner).to receive(:chat_raw).and_return(chat_response)
+        allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-          .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
         allow(mock_policy).to receive(:validate!)
         allow(audit_log).to receive(:record)
 
@@ -164,7 +164,7 @@ RSpec.describe AgentRuntime::AgentFSM do
           .and_return(tool_call_response, final_response)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-          .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         result = agent_with_tools.run(initial_input: "test")
 
@@ -178,21 +178,19 @@ RSpec.describe AgentRuntime::AgentFSM do
       end
     end
 
-    context "workflow halting" do
+    context "when workflow halts" do
       it "halts on plan failure" do
         allow(mock_planner).to receive(:plan).and_raise(StandardError, "Plan failed")
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-          .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
         allow(audit_log).to receive(:record)
 
         # The workflow should halt, either by raising or returning nil with HALT state
         begin
           result = agent_fsm.run(initial_input: "test")
           # If it returns nil, check that FSM is in HALT state
-          if result.nil?
-            expect(agent_fsm.fsm.halt?).to be true
-          end
+          expect(agent_fsm.fsm.halt?).to be true if result.nil?
         rescue AgentRuntime::ExecutionError => e
           expect(e.message).to match(/Agent halted/)
         end
@@ -208,16 +206,14 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:chat_raw).and_raise(StandardError, "Execution failed")
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-          .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
         allow(audit_log).to receive(:record)
 
         # The workflow should halt, either by raising or returning nil with HALT state
         begin
           result = agent_fsm.run(initial_input: "test")
           # If it returns nil, check that FSM is in HALT state
-          if result.nil?
-            expect(agent_fsm.fsm.halt?).to be true
-          end
+          expect(agent_fsm.fsm.halt?).to be true if result.nil?
         rescue AgentRuntime::ExecutionError => e
           expect(e.message).to match(/Agent halted/)
         end
@@ -245,7 +241,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         }
 
         tools_with_search = AgentRuntime::ToolRegistry.new({
-                                                             "search" => ->(query:) { { result: "found" } }
+                                                             "search" => ->(_query:) { { result: "found" } }
                                                            })
 
         agent_limited = described_class.new(
@@ -257,27 +253,24 @@ RSpec.describe AgentRuntime::AgentFSM do
           max_iterations: 2
         )
 
-        allow(mock_planner).to receive(:plan).and_return(plan_decision)
-        allow(mock_planner).to receive(:chat_raw).and_return(tool_call_response)
+        allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: tool_call_response)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-          .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
         allow(audit_log).to receive(:record)
 
         # The workflow should halt when max iterations exceeded
         begin
           result = agent_limited.run(initial_input: "test")
           # If it returns nil, check that FSM is in HALT state
-          if result.nil?
-            expect(agent_limited.fsm.halt?).to be true
-          end
+          expect(agent_limited.fsm.halt?).to be true if result.nil?
         rescue AgentRuntime::ExecutionError => e
           expect(e.message).to match(/Agent halted/)
         end
       end
     end
 
-    context "state handling" do
+    context "with state handling" do
       it "resets FSM before running" do
         plan_decision = AgentRuntime::Decision.new(
           action: "plan",
@@ -294,7 +287,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                              .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         # Run once
         agent_fsm.run(initial_input: "first")
@@ -323,7 +316,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                              .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         agent_fsm.run(initial_input: "first")
         agent_fsm.messages.length
@@ -368,7 +361,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:plan).and_return(plan_decision)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                              .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         agent_fsm.instance_variable_set(:@messages, [{ role: "user", content: "test" }])
         agent_fsm.fsm.transition_to(AgentRuntime::FSM::STATES[:PLAN])
@@ -389,7 +382,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:plan).and_return(plan_decision)
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                              .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         agent_fsm.instance_variable_set(:@messages, [{ role: "user", content: "fallback" }])
         agent_fsm.fsm.transition_to(AgentRuntime::FSM::STATES[:PLAN])
@@ -403,7 +396,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:plan).and_raise(StandardError, "Failed")
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                              .and_return(->(input:, state:) { "Prompt" })
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
 
         agent_fsm.instance_variable_set(:@messages, [{ role: "user", content: "test" }])
         agent_fsm.fsm.transition_to(AgentRuntime::FSM::STATES[:PLAN])
@@ -530,8 +523,8 @@ RSpec.describe AgentRuntime::AgentFSM do
     describe "#handle_observe" do
       it "executes tools and appends results" do
         tools = AgentRuntime::ToolRegistry.new({
-                                                  "search" => ->(query:) { { result: "found: #{query}" } }
-                                                })
+                                                 "search" => ->(query:) { { result: "found: #{query}" } }
+                                               })
 
         agent_with_tools = described_class.new(
           planner: mock_planner,
@@ -590,8 +583,8 @@ RSpec.describe AgentRuntime::AgentFSM do
 
       it "handles tool execution errors gracefully" do
         tools = AgentRuntime::ToolRegistry.new({
-                                                  "error_tool" => ->(**_args) { raise StandardError, "Tool error" }
-                                                })
+                                                 "error_tool" => ->(**_args) { raise StandardError, "Tool error" }
+                                               })
 
         agent_with_tools = described_class.new(
           planner: mock_planner,
@@ -691,9 +684,9 @@ RSpec.describe AgentRuntime::AgentFSM do
         agent_fsm.fsm.transition_to(AgentRuntime::FSM::STATES[:DECIDE])
         agent_fsm.fsm.transition_to(AgentRuntime::FSM::STATES[:FINALIZE])
         agent_fsm.instance_variable_set(:@messages, [
-                                           { role: "user", content: "test" },
-                                           { role: "assistant", content: "response" }
-                                         ])
+                                          { role: "user", content: "test" },
+                                          { role: "assistant", content: "response" }
+                                        ])
 
         allow(audit_log).to receive(:record)
 
@@ -759,8 +752,8 @@ RSpec.describe AgentRuntime::AgentFSM do
 
       it "returns tool definitions for registered tools" do
         tools_reg = AgentRuntime::ToolRegistry.new({
-                                                     "search" => ->(query:) { "results" },
-                                                     "fetch" => ->(id:) { "data" }
+                                                     "search" => ->(_query:) { "results" },
+                                                     "fetch" => ->(_id:) { "data" }
                                                    })
 
         agent_with_tools = described_class.new(
@@ -838,7 +831,7 @@ RSpec.describe AgentRuntime::AgentFSM do
       allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
       allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
       allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                            .and_return(->(input:, state:) { "Prompt" })
+                                                            .and_return(->(_input:, _state:) { "Prompt" })
       allow(audit_log).to receive(:record)
 
       result = agent_fsm.run(initial_input: "")
@@ -867,7 +860,7 @@ RSpec.describe AgentRuntime::AgentFSM do
       allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
       allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
       allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
-                                                            .and_return(->(input:, state:) { "Prompt" })
+                                                            .and_return(->(_input:, _state:) { "Prompt" })
       allow(audit_log).to receive(:record)
 
       # The workflow should complete successfully
@@ -884,3 +877,4 @@ RSpec.describe AgentRuntime::AgentFSM do
     end
   end
 end
+# rubocop:enable RSpec/MultipleMemoizedHelpers
