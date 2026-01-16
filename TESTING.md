@@ -42,9 +42,85 @@ bundle exec rspec --format documentation
 # Run specific test file
 bundle exec rspec spec/agent_runtime_spec.rb
 
-# Run with coverage (if configured)
+# Run with coverage reporting
 bundle exec rspec --format documentation
+# Coverage report will be generated in coverage/index.html
 ```
+
+### Test Coverage
+
+The project uses [SimpleCov](https://github.com/simplecov-ruby/simplecov) for test coverage reporting.
+
+#### Viewing Coverage Reports
+
+After running tests, open the HTML coverage report:
+
+```bash
+# Run tests (coverage is generated automatically)
+bundle exec rspec
+
+# Open the coverage report in your browser
+open coverage/index.html  # macOS
+xdg-open coverage/index.html  # Linux
+start coverage/index.html  # Windows
+```
+
+The coverage report shows:
+- **Line coverage**: Percentage of lines executed
+- **Branch coverage**: Percentage of branches covered
+- **File-by-file breakdown**: See which files need more tests
+- **Uncovered lines**: Highlighted in the HTML report
+
+#### Coverage Configuration
+
+Coverage is configured in `spec/spec_helper.rb`. Key settings:
+
+- **Filters**: Excludes `/spec/`, `/.bundle/`, and `/vendor/` directories
+- **Formatters**: Generates both HTML and simple text output
+- **Minimum threshold**: Optional, set via `COVERAGE_THRESHOLD` environment variable
+
+#### Setting Coverage Thresholds
+
+To enforce a minimum coverage threshold (fails build if not met):
+
+```bash
+# Set 80% minimum coverage
+COVERAGE_THRESHOLD=80 bundle exec rspec
+
+# Set 90% minimum coverage
+COVERAGE_THRESHOLD=90 bundle exec rspec
+```
+
+#### Coverage in CI/CD
+
+For CI/CD pipelines, you can:
+
+1. **Generate coverage report**:
+   ```yaml
+   - run: bundle exec rspec
+   ```
+
+2. **Upload coverage to a service** (e.g., Codecov, Coveralls):
+   ```yaml
+   - uses: codecov/codecov-action@v3
+     with:
+       files: ./coverage/.resultset.json
+   ```
+
+3. **Check coverage threshold**:
+   ```yaml
+   - run: COVERAGE_THRESHOLD=80 bundle exec rspec
+   ```
+
+#### Improving Coverage
+
+To improve test coverage:
+
+1. **Identify uncovered files**: Check `coverage/index.html`
+2. **Focus on critical paths**: Prioritize core classes (`Agent`, `AgentFSM`, `Planner`, `Executor`)
+3. **Test edge cases**: Error conditions, boundary values, nil handling
+4. **Test private methods indirectly**: Through public interfaces
+5. **Use coverage to guide testing**: Aim for 80%+ coverage on core functionality
 
 ### Test Structure
 
@@ -387,3 +463,5 @@ Before committing, verify:
 - [ ] Manual test works: `ruby examples/fixed_console_example.rb`
 - [ ] Integration tests pass (if Ollama is available)
 - [ ] No linter errors: `bundle exec rubocop -a`
+- [ ] Coverage report reviewed: `open coverage/index.html`
+- [ ] Coverage meets threshold (if set): `COVERAGE_THRESHOLD=80 bundle exec rspec`
