@@ -165,10 +165,10 @@ module ConsoleHelpers
                                                if args[:symbol] && !args[:exchange_segment]
                                                  symbol_up = args[:symbol].to_s.upcase
                                                  args[:exchange_segment] = if %w[NIFTY BANKNIFTY FINNIFTY MIDCPNIFTY SENSEX BANKEX].include?(symbol_up)
-                                                                              "IDX_I"
-                                                                            else
-                                                                              "NSE_FNO"
-                                                                            end
+                                                                             "IDX_I"
+                                                                           else
+                                                                             "NSE_FNO"
+                                                                           end
                                                end
 
                                                normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
@@ -192,10 +192,10 @@ module ConsoleHelpers
                                                if args[:symbol] && !args[:exchange_segment]
                                                  symbol_up = args[:symbol].to_s.upcase
                                                  args[:exchange_segment] = if %w[NIFTY BANKNIFTY FINNIFTY MIDCPNIFTY SENSEX BANKEX].include?(symbol_up)
-                                                                              "IDX_I"
-                                                                            else
-                                                                              "NSE_FNO"
-                                                                            end
+                                                                             "IDX_I"
+                                                                           else
+                                                                             "NSE_FNO"
+                                                                           end
                                                end
 
                                                normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
@@ -246,7 +246,7 @@ module ConsoleHelpers
                                                end
 
                                                normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
-                                               
+
                                                # Fetch historical data with calculate_indicators=true
                                                historical_result = DhanHQDataTools.get_historical_data(
                                                  exchange_segment: args[:exchange_segment],
@@ -283,44 +283,42 @@ module ConsoleHelpers
                                                      instrument_info: historical_result[:result][:instrument_info]
                                                    }
                                                  }
-                                               else
+                                               elsif historical_result[:result] && historical_result[:result][:data]
                                                  # Fallback: calculate indicators manually from raw data
-                                                 if historical_result[:result] && historical_result[:result][:data]
-                                                   indicators = DhanHQDataTools.calculate_technical_indicators(
-                                                     historical_result[:result][:data]
-                                                   )
-                                                   {
-                                                     action: "analyze_technical",
-                                                     params: {
-                                                       symbol: args[:symbol],
-                                                       exchange_segment: args[:exchange_segment],
-                                                       from_date: args[:from_date],
-                                                       to_date: args[:to_date],
-                                                       interval: args[:interval]
-                                                     }.compact,
-                                                     result: {
-                                                       symbol: args[:symbol],
-                                                       exchange_segment: args[:exchange_segment],
-                                                       analysis_period: {
-                                                         from: args[:from_date],
-                                                         to: args[:to_date],
-                                                         interval: args[:interval] || "daily"
-                                                       },
-                                                       indicators: indicators,
-                                                       data_points: historical_result[:result][:count] || 0,
-                                                       instrument_info: historical_result[:result][:instrument_info]
-                                                     }
+                                                 indicators = DhanHQDataTools.calculate_technical_indicators(
+                                                   historical_result[:result][:data]
+                                                 )
+                                                 {
+                                                   action: "analyze_technical",
+                                                   params: {
+                                                     symbol: args[:symbol],
+                                                     exchange_segment: args[:exchange_segment],
+                                                     from_date: args[:from_date],
+                                                     to_date: args[:to_date],
+                                                     interval: args[:interval]
+                                                   }.compact,
+                                                   result: {
+                                                     symbol: args[:symbol],
+                                                     exchange_segment: args[:exchange_segment],
+                                                     analysis_period: {
+                                                       from: args[:from_date],
+                                                       to: args[:to_date],
+                                                       interval: args[:interval] || "daily"
+                                                     },
+                                                     indicators: indicators,
+                                                     data_points: historical_result[:result][:count] || 0,
+                                                     instrument_info: historical_result[:result][:instrument_info]
                                                    }
-                                                 else
-                                                   {
-                                                     action: "analyze_technical",
-                                                     error: "Failed to fetch historical data for technical analysis",
-                                                     params: {
-                                                       symbol: args[:symbol],
-                                                       exchange_segment: args[:exchange_segment]
-                                                     }
+                                                 }
+                                               else
+                                                 {
+                                                   action: "analyze_technical",
+                                                   error: "Failed to fetch historical data for technical analysis",
+                                                   params: {
+                                                     symbol: args[:symbol],
+                                                     exchange_segment: args[:exchange_segment]
                                                    }
-                                                 end
+                                                 }
                                                end
                                              }
                                            })
