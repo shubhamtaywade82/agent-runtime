@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
 module AgentRuntime
-  VERSION = "0.1.0"
+  # Current version of the AgentRuntime gem.
+  #
+  # @return [String] Version string in semantic versioning format
+  VERSION = "0.2.0"
 end
