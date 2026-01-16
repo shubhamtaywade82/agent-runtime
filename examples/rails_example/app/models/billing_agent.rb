@@ -37,13 +37,39 @@ class BillingAgent
 
   def self.decision_schema
     {
-      "action" => "string",
-      "params" => {
-        "invoice_id" => "string",
-        "customer_id" => "string",
-        "explanation" => "string"
-      },
-      "confidence" => "number"
+      "type" => "object",
+      "required" => %w[action params],
+      "properties" => {
+        "action" => {
+          "type" => "string",
+          "enum" => %w[analyze fetch_invoice finish],
+          "description" => "The action to execute"
+        },
+        "params" => {
+          "type" => "object",
+          "properties" => {
+            "invoice_id" => {
+              "type" => "string",
+              "description" => "Invoice identifier"
+            },
+            "customer_id" => {
+              "type" => "string",
+              "description" => "Customer identifier"
+            },
+            "explanation" => {
+              "type" => "string",
+              "description" => "Analysis explanation"
+            }
+          },
+          "additionalProperties" => true
+        },
+        "confidence" => {
+          "type" => "number",
+          "minimum" => 0,
+          "maximum" => 1,
+          "description" => "Confidence level (0.0 to 1.0)"
+        }
+      }
     }
   end
 
@@ -51,14 +77,21 @@ class BillingAgent
     <<~PROMPT
       You are a billing analysis assistant. Analyze the user's question about billing.
 
-      User question: #{input}
+      User Question: #{input}
 
-      Current context: #{state.to_json}
+      Current State: #{state.to_json}
 
-      Respond with:
-      - action: "analyze" or "fetch_invoice" or "finish"
-      - params: relevant invoice/customer IDs and explanation
-      - confidence: your confidence level (0.0 to 1.0)
+      Available Actions:
+      - analyze: Analyze billing data (requires: invoice_id, customer_id, explanation)
+      - fetch_invoice: Fetch invoice details (requires: invoice_id)
+      - finish: Complete the task
+
+      Respond with a JSON object:
+      {
+        "action": "one of the available actions",
+        "params": { "invoice_id": "123", "customer_id": "456", "explanation": "..." },
+        "confidence": 0.9
+      }
     PROMPT
   end
 

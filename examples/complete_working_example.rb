@@ -44,12 +44,11 @@ tools = AgentRuntime::ToolRegistry.new({
                                            { result: result, expression: expression }
                                          end,
 
-                                         # Data fetcher tool
-                                         "fetch_data" => lambda do |resource:, **options|
+                                         # Get time tool (no parameters needed)
+                                         "get_time" => lambda do |**_kwargs|
                                            {
-                                             resource: resource,
-                                             data: { id: 123, name: "Sample Data", options: options },
-                                             fetched_at: Time.now.utc.iso8601
+                                             current_time: Time.now.utc.iso8601,
+                                             timezone: "UTC"
                                            }
                                          end
                                        })
@@ -89,7 +88,7 @@ schema = {
   "properties" => {
     "action" => {
       "type" => "string",
-      "enum" => %w[search calculate fetch_data finish],
+      "enum" => %w[search calculate get_time finish],
       "description" => "The action to execute"
     },
     "params" => {
@@ -125,7 +124,7 @@ prompt_builder = lambda do |input:, state:|
     Available Actions:
     - search: Search for information (requires: query)
     - calculate: Perform calculations (requires: expression like "2+2" or "10*5")
-    - fetch_data: Fetch data from a resource (requires: resource name)
+    - get_time: Get current time (no parameters needed)
     - finish: Complete the task
 
     Respond with a JSON object:
@@ -231,12 +230,22 @@ puts "\n📝 Test 3: Multi-step workflow - Agent#run"
 puts "-" * 70
 
 begin
-  result = agent.run(initial_input: "Search for Ruby, then finish")
+  # Use lower max_iterations for demo purposes
+  demo_agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: policy,
+    executor: executor,
+    state: AgentRuntime::State.new,
+    max_iterations: 3
+  )
+
+  result = demo_agent.run(initial_input: "Get the current time, then use the finish action")
   puts "✅ Success!"
   puts "Result: #{result.inspect}"
   puts "Iterations: #{result[:iterations]}"
 rescue AgentRuntime::MaxIterationsExceeded => e
   puts "⚠️  Max iterations exceeded: #{e.message}"
+  puts "   (This demonstrates the max_iterations safety mechanism)"
 rescue StandardError => e
   puts "❌ Error: #{e.class}: #{e.message}"
 end
@@ -253,55 +262,64 @@ puts
 puts "\n🤖 Step 8: Creating AgentFSM..."
 
 # For AgentFSM, we need to override build_tools_for_chat to provide proper tool schemas
-# rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/BlockLength
 class ExampleAgentFSM < AgentRuntime::AgentFSM
   def build_tools_for_chat
     tools_hash = @tool_registry.instance_variable_get(:@tools) || {}
     return [] if tools_hash.empty?
 
-    tools_hash.keys.map do |tool_name|
-      {
-        type: "function",
-        function: {
-          name: tool_name.to_s,
-          description: case tool_name.to_s
-                       when "search"
-                         "Search for information. Requires 'query' parameter."
-                       when "calculate"
-                         "Perform calculations. Requires 'expression' parameter (e.g., '2+2')."
-                       when "fetch_data"
-                         "Fetch data from a resource. Requires 'resource' parameter."
-                       else
-                         "Tool: #{tool_name}"
-                       end,
-          parameters: {
-            type: "object",
-            properties: case tool_name.to_s
-                        when "search"
-                          { query: { type: "string", description: "Search query" } }
-                        when "calculate"
-                          { expression: { type: "string", description: "Mathematical expression" } }
-                        when "fetch_data"
-                          { resource: { type: "string", description: "Resource name" } }
-                        else
-                          {}
-                        end,
-            required: case tool_name.to_s
-                      when "search"
-                        ["query"]
-                      when "calculate"
-                        ["expression"]
-                      when "fetch_data"
-                        ["resource"]
-                      else
-                        []
-                      end
-          }
-        }
-      }
-    end
+    tools_hash.keys.map { |tool_name| build_tool_schema(tool_name) }
   end
-  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/BlockLength
+
+  private
+
+  def build_tool_schema(tool_name)
+    {
+      type: "function",
+      function: {
+        name: tool_name.to_s,
+        description: tool_description(tool_name),
+        parameters: tool_parameters(tool_name)
+      }
+    }
+  end
+
+  def tool_description(tool_name)
+    TOOL_DESCRIPTIONS.fetch(tool_name.to_s, "Tool: #{tool_name}")
+  end
+
+  def tool_parameters(tool_name)
+    {
+      type: "object",
+      properties: tool_properties(tool_name),
+      required: tool_required_params(tool_name)
+    }
+  end
+
+  def tool_properties(tool_name)
+    TOOL_PROPERTIES.fetch(tool_name.to_s, {})
+  end
+
+  def tool_required_params(tool_name)
+    TOOL_REQUIRED.fetch(tool_name.to_s, [])
+  end
+
+  TOOL_DESCRIPTIONS = {
+    "search" => "Search for information. Requires 'query' parameter.",
+    "calculate" => "Perform calculations. Requires 'expression' parameter (e.g., '2+2').",
+    "get_time" => "Get current time. No parameters required."
+  }.freeze
+
+  TOOL_PROPERTIES = {
+    "search" => { query: { type: "string", description: "Search query" } },
+    "calculate" => { expression: { type: "string", description: "Mathematical expression" } },
+    "get_time" => {}
+  }.freeze
+
+  TOOL_REQUIRED = {
+    "search" => ["query"],
+    "calculate" => ["expression"],
+    "get_time" => []
+  }.freeze
 end
 
 agent_fsm = ExampleAgentFSM.new(
@@ -325,11 +343,22 @@ puts "-" * 70
 
 begin
   result = agent_fsm.run(initial_input: "Search for information about Ruby agents")
-  puts "✅ Success!"
-  puts "Done: #{result[:done]}"
-  puts "Iterations: #{result[:iterations]}"
-  puts "FSM States visited: #{result[:fsm_history].map { |h| h[:to] }.uniq.length}"
-  puts "Final state keys: #{result[:state].keys.join(", ")}"
+
+  if result.nil?
+    puts "✅ FSM completed (halted before finalize)"
+    puts "FSM is in terminal state: #{agent_fsm.fsm.terminal?}"
+    puts "Final FSM state: #{agent_fsm.fsm.state_name}"
+  elsif result.is_a?(Hash)
+    puts "✅ Success!"
+    puts "Done: #{result[:done]}"
+    puts "Iterations: #{result[:iterations]}" if result[:iterations]
+    if result[:fsm_history]
+      puts "FSM States visited: #{result[:fsm_history].map { |h| h[:to] }.uniq.length}"
+    end
+    puts "Final state keys: #{result[:state].keys.join(", ")}" if result[:state]
+  else
+    puts "⚠️  Unexpected result type: #{result.class}"
+  end
 rescue AgentRuntime::ExecutionError => e
   puts "❌ Execution error: #{e.message}"
 rescue StandardError => e
