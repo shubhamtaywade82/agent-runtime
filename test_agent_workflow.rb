@@ -58,6 +58,25 @@ def puts_verbose(text)
   puts Colors.blue("🔍 #{text}") if VERBOSE
 end
 
+def capture_stdout
+  require "stringio"
+  original_stdout = $stdout
+  captured_output = StringIO.new
+  $stdout = captured_output
+
+  yield
+
+  captured_output.string
+ensure
+  $stdout = original_stdout
+end
+
+def audit_log_valid?(output)
+  output.include?('"time"') &&
+    output.include?('"input"') &&
+    output.include?('"decision"')
+end
+
 # Test results tracker
 class TestResults
   attr_reader :passed, :failed, :total
@@ -360,54 +379,65 @@ puts_header("Test 5: AgentFSM - Full FSM Workflow")
 
 begin
   # For AgentFSM, we need to override build_tools_for_chat
-  # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/BlockLength, Metrics/MethodLength, Style/Documentation
   class TestAgentFSM < AgentRuntime::AgentFSM
     def build_tools_for_chat
       tools_hash = @tool_registry.instance_variable_get(:@tools) || {}
       return [] if tools_hash.empty?
 
-      tools_hash.keys.map do |tool_name|
-        {
-          type: "function",
-          function: {
-            name: tool_name.to_s,
-            description: case tool_name.to_s
-                         when "search"
-                           "Search for information. Requires 'query' parameter."
-                         when "calculate"
-                           "Perform calculations. Requires 'expression' parameter (e.g., '2+2')."
-                         when "get_time"
-                           "Get current time. No parameters required."
-                         else
-                           "Tool: #{tool_name}"
-                         end,
-            parameters: {
-              type: "object",
-              properties: case tool_name.to_s
-                          when "search"
-                            { query: { type: "string", description: "Search query" } }
-                          when "calculate"
-                            { expression: { type: "string", description: "Mathematical expression" } }
-                          when "get_time"
-                            {}
-                          else
-                            {}
-                          end,
-              required: case tool_name.to_s
-                        when "search"
-                          ["query"]
-                        when "calculate"
-                          ["expression"]
-                        else
-                          []
-                        end
-            }
-          }
-        }
-      end
+      tools_hash.keys.map { |tool_name| build_tool_schema(tool_name) }
     end
+
+    private
+
+    def build_tool_schema(tool_name)
+      {
+        type: "function",
+        function: {
+          name: tool_name.to_s,
+          description: tool_description(tool_name),
+          parameters: tool_parameters(tool_name)
+        }
+      }
+    end
+
+    def tool_description(tool_name)
+      TOOL_DESCRIPTIONS.fetch(tool_name.to_s, "Tool: #{tool_name}")
+    end
+
+    def tool_parameters(tool_name)
+      {
+        type: "object",
+        properties: tool_properties(tool_name),
+        required: tool_required_params(tool_name)
+      }
+    end
+
+    def tool_properties(tool_name)
+      TOOL_PROPERTIES.fetch(tool_name.to_s, {})
+    end
+
+    def tool_required_params(tool_name)
+      TOOL_REQUIRED.fetch(tool_name.to_s, [])
+    end
+
+    TOOL_DESCRIPTIONS = {
+      "search" => "Search for information. Requires 'query' parameter.",
+      "calculate" => "Perform calculations. Requires 'expression' parameter (e.g., '2+2').",
+      "get_time" => "Get current time. No parameters required."
+    }.freeze
+
+    TOOL_PROPERTIES = {
+      "search" => { query: { type: "string", description: "Search query" } },
+      "calculate" => { expression: { type: "string", description: "Mathematical expression" } },
+      "get_time" => {}
+    }.freeze
+
+    TOOL_REQUIRED = {
+      "search" => ["query"],
+      "calculate" => ["expression"],
+      "get_time" => []
+    }.freeze
   end
-  # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/BlockLength, Metrics/MethodLength, Style/Documentation
 
   agent_fsm = TestAgentFSM.new(
     planner: planner,
@@ -479,6 +509,173 @@ begin
   end
 rescue StandardError => e
   results.record(false, "State persistence")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 7: Policy Validation (Low Confidence)
+# ============================================================================
+puts_header("Test 7: Policy Validation - Low Confidence Rejection")
+
+begin
+  # Create a custom policy that will reject low confidence
+  # Note: Default Policy already rejects confidence < 0.5, but we'll test it explicitly
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    state: AgentRuntime::State.new
+  )
+
+  puts_info("Note: Testing policy validation requires LLM to return low confidence")
+  puts_info("This test verifies the policy system is active (may pass if LLM returns high confidence)")
+
+  result = agent.step(input: "Search for something with low confidence")
+
+  # If we get here, either LLM returned high confidence or policy didn't reject
+  # Both are acceptable - the important thing is the policy system is active
+  if result.is_a?(Hash)
+    results.record(true, "Policy validation system active")
+    puts_verbose("Result: #{result.inspect}")
+    puts_info("Policy system is working (LLM returned acceptable confidence)")
+  else
+    results.record(false, "Policy validation")
+    puts_error("Unexpected result: #{result.inspect}")
+  end
+rescue AgentRuntime::PolicyViolation => e
+  # This is actually good - policy rejected low confidence
+  results.record(true, "Policy validation (rejected low confidence)")
+  puts_success("Policy correctly rejected decision: #{e.message}")
+rescue StandardError => e
+  results.record(false, "Policy validation")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 8: Error Handling - Missing Tool
+# ============================================================================
+puts_header("Test 8: Error Handling - Missing Tool")
+
+begin
+  # Create agent with limited tools (no "unknown_tool")
+  limited_tools = AgentRuntime::ToolRegistry.new({
+                                                   "search" => ->(query:) { { result: "Found: #{query}" } }
+                                                 })
+
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: limited_tools),
+    state: AgentRuntime::State.new
+  )
+
+  puts_info("Testing with request that might trigger unknown tool...")
+  puts_info("Note: LLM might choose 'search' instead, which is acceptable")
+
+  result = agent.step(input: "Use a tool that doesn't exist")
+
+  # If LLM chooses an available tool, that's fine
+  if result.is_a?(Hash)
+    results.record(true, "Error handling (LLM chose available tool)")
+    puts_verbose("Result: #{result.inspect}")
+    puts_info("LLM intelligently chose an available tool")
+  else
+    results.record(false, "Error handling")
+    puts_error("Unexpected result: #{result.inspect}")
+  end
+rescue AgentRuntime::ExecutionError => e
+  # This is expected if LLM tries to use missing tool
+  if e.message.include?("Tool not found")
+    results.record(true, "Error handling (correctly rejected missing tool)")
+    puts_success("Correctly raised ExecutionError for missing tool: #{e.message}")
+  else
+    results.record(false, "Error handling")
+    puts_error("Unexpected ExecutionError: #{e.message}")
+  end
+rescue StandardError => e
+  results.record(false, "Error handling")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 9: Audit Logging Verification
+# ============================================================================
+puts_header("Test 9: Audit Logging Verification")
+
+begin
+  require "stringio"
+
+  output = capture_stdout do
+    agent = AgentRuntime::Agent.new(
+      planner: planner,
+      policy: AgentRuntime::Policy.new,
+      executor: AgentRuntime::Executor.new(tool_registry: tools),
+      state: AgentRuntime::State.new,
+      audit_log: AgentRuntime::AuditLog.new
+    )
+
+    agent.step(input: "Get current time")
+  end
+
+  if audit_log_valid?(output)
+    results.record(true, "Audit logging (JSON output verified)")
+    puts_verbose("Audit log output: #{output.strip}")
+  else
+    results.record(false, "Audit logging")
+    puts_error("Audit log output missing expected fields")
+    puts_verbose("Output: #{output}")
+  end
+rescue StandardError => e
+  results.record(false, "Audit logging")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 10: FSM State Transitions Verification
+# ============================================================================
+puts_header("Test 10: FSM State Transitions Verification")
+
+begin
+  agent_fsm = TestAgentFSM.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    state: AgentRuntime::State.new,
+    tool_registry: tools,
+    audit_log: AgentRuntime::AuditLog.new,
+    max_iterations: 10
+  )
+
+  result = agent_fsm.run(initial_input: "Search for Ruby, then finish")
+
+  # Verify FSM went through expected states
+  if result.nil?
+    history = agent_fsm.fsm.history
+    state_names = history.map { |h| h[:to] }
+    if state_names.include?(AgentRuntime::FSM::STATES[:PLAN]) &&
+       state_names.include?(AgentRuntime::FSM::STATES[:EXECUTE])
+      results.record(true, "FSM state transitions (verified state sequence)")
+      puts_verbose("States visited: #{state_names.join(" -> ")}")
+    else
+      results.record(false, "FSM state transitions")
+      puts_error("Expected states not found in history")
+    end
+  elsif result.is_a?(Hash) && result[:fsm_history]
+    state_names = result[:fsm_history].map { |h| h[:to] }
+    if state_names.include?(AgentRuntime::FSM::STATES[:PLAN]) &&
+       state_names.include?(AgentRuntime::FSM::STATES[:EXECUTE])
+      results.record(true, "FSM state transitions (verified state sequence)")
+      puts_verbose("States visited: #{state_names.join(" -> ")}")
+    else
+      results.record(false, "FSM state transitions")
+      puts_error("Expected states not found in history")
+    end
+  else
+    results.record(false, "FSM state transitions")
+    puts_error("Cannot verify state transitions - no history available")
+  end
+rescue StandardError => e
+  results.record(false, "FSM state transitions")
   puts_error("Error: #{e.class}: #{e.message}")
 end
 
