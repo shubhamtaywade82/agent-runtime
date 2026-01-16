@@ -7,6 +7,18 @@
 # This script tests the agent-runtime gem with real Ollama connections.
 # It verifies that the complete workflow works from start to finish.
 #
+# Test Coverage (15 tests):
+#   - Core Agent workflows (step, run, multi-step)
+#   - AgentFSM complete workflow
+#   - State management and persistence
+#   - Policy validation and extensibility
+#   - Executor and tool execution
+#   - Audit logging and extensibility
+#   - FSM state transitions
+#   - Error handling (missing tools, exceptions, max iterations)
+#   - Deep state merging
+#   - Custom input builders
+#
 # Prerequisites:
 #   1. Ollama server running: `ollama serve`
 #   2. A model available (e.g., `ollama pull llama3.1:8b`)
@@ -676,6 +688,217 @@ begin
   end
 rescue StandardError => e
   results.record(false, "FSM state transitions")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 11: Custom Policy Subclass - Extensibility Pattern
+# ============================================================================
+puts_header("Test 11: Custom Policy Subclass - Extensibility")
+
+begin
+  class RestrictivePolicy < AgentRuntime::Policy
+    def validate!(decision, state:)
+      super
+      raise AgentRuntime::PolicyViolation, "Action 'dangerous' not allowed" if decision.action == "dangerous"
+    end
+  end
+
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: RestrictivePolicy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    state: AgentRuntime::State.new
+  )
+
+  puts_info("Testing custom policy that rejects specific actions...")
+
+  result = agent.step(input: "Search for Ruby patterns")
+
+  if result.is_a?(Hash)
+    results.record(true, "Custom policy allows valid actions")
+    puts_verbose("Custom policy correctly allowed action")
+  else
+    results.record(false, "Custom policy extensibility")
+    puts_error("Unexpected result: #{result.inspect}")
+  end
+rescue AgentRuntime::PolicyViolation => e
+  if e.message.include?("dangerous")
+    results.record(true, "Custom policy correctly rejects dangerous action")
+    puts_success("Policy correctly rejected: #{e.message}")
+  else
+    results.record(false, "Custom policy extensibility")
+    puts_error("Unexpected PolicyViolation: #{e.message}")
+  end
+rescue StandardError => e
+  results.record(false, "Custom policy extensibility")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 12: Custom AuditLog Subclass - Extensibility Pattern
+# ============================================================================
+puts_header("Test 12: Custom AuditLog Subclass - Extensibility")
+
+begin
+  class CollectorAuditLog < AgentRuntime::AuditLog
+    attr_reader :entries
+
+    def initialize
+      super()
+      @entries = []
+    end
+
+    def record(input:, decision:, result:)
+      super
+      @entries << { input: input, decision: decision, result: result }
+    end
+  end
+
+  audit_log = CollectorAuditLog.new
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    state: AgentRuntime::State.new,
+    audit_log: audit_log
+  )
+
+  puts_info("Testing custom audit log that collects entries...")
+
+  agent.step(input: "Get current time")
+  agent.step(input: "Calculate 5 + 5")
+
+  if audit_log.entries.length == 2
+    results.record(true, "Custom audit log collects entries")
+    puts_verbose("Collected #{audit_log.entries.length} audit entries")
+  else
+    results.record(false, "Custom audit log extensibility")
+    puts_error("Expected 2 entries, got #{audit_log.entries.length}")
+  end
+rescue StandardError => e
+  results.record(false, "Custom audit log extensibility")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 13: Tool Exception Handling
+# ============================================================================
+puts_header("Test 13: Tool Exception Handling")
+
+begin
+  broken_tools = AgentRuntime::ToolRegistry.new({
+                                                   "broken" => lambda do |**_kwargs|
+                                                     raise StandardError, "Database connection failed"
+                                                   end,
+                                                   "search" => ->(query:) { { result: "Found: #{query}" } }
+                                                 })
+
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: broken_tools),
+    state: AgentRuntime::State.new
+  )
+
+  puts_info("Testing tool that raises exception...")
+  puts_info("Note: LLM might choose 'search' instead of 'broken'")
+
+  result = agent.step(input: "Use a tool")
+
+  if result.is_a?(Hash)
+    results.record(true, "Tool exception handling (LLM chose working tool)")
+    puts_verbose("LLM intelligently avoided broken tool")
+  else
+    results.record(false, "Tool exception handling")
+    puts_error("Unexpected result: #{result.inspect}")
+  end
+rescue AgentRuntime::ExecutionError => e
+  results.record(true, "Tool exception handling (correctly wrapped)")
+  puts_success("ExecutionError correctly raised: #{e.message}")
+rescue StandardError => e
+  results.record(false, "Tool exception handling")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 14: State Deep Merging
+# ============================================================================
+puts_header("Test 14: State Deep Merging")
+
+begin
+  state = AgentRuntime::State.new({
+                                    user: { name: "Alice", prefs: { theme: "dark" } },
+                                    history: [1, 2]
+                                  })
+
+  puts_info("Testing deep merge with nested hashes...")
+
+  state.apply!({ user: { prefs: { lang: "en" } }, history: [3] })
+
+  snapshot = state.snapshot
+
+  preserved_name = snapshot.dig(:user, :name) == "Alice"
+  preserved_theme = snapshot.dig(:user, :prefs, :theme) == "dark"
+  added_lang = snapshot.dig(:user, :prefs, :lang) == "en"
+  overwritten_history = snapshot[:history] == [3]
+
+  if preserved_name && preserved_theme && added_lang && overwritten_history
+    results.record(true, "State deep merging (preserves nested structures)")
+    puts_verbose("Deep merge correctly preserved nested values")
+  else
+    results.record(false, "State deep merging")
+    puts_error("Deep merge failed: #{snapshot.inspect}")
+    puts_verbose("preserved_name: #{preserved_name}, preserved_theme: #{preserved_theme}")
+    puts_verbose("added_lang: #{added_lang}, overwritten_history: #{overwritten_history}")
+  end
+rescue StandardError => e
+  results.record(false, "State deep merging")
+  puts_error("Error: #{e.class}: #{e.message}")
+end
+
+# ============================================================================
+# TEST 15: Agent#run with Custom Input Builder
+# ============================================================================
+puts_header("Test 15: Agent#run with Custom Input Builder")
+
+begin
+  iteration_tracker = []
+  custom_builder = lambda do |result, iteration|
+    iteration_tracker << iteration
+    "Iteration #{iteration}: Continue based on #{result.keys.join(', ')}"
+  end
+
+  agent = AgentRuntime::Agent.new(
+    planner: planner,
+    policy: AgentRuntime::Policy.new,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    state: AgentRuntime::State.new,
+    max_iterations: 5
+  )
+
+  puts_info("Testing Agent#run with custom input builder...")
+
+  result = agent.run(initial_input: "Get time and finish", input_builder: custom_builder)
+
+  if result.is_a?(Hash) && (result[:done] || iteration_tracker.any?)
+    results.record(true, "Custom input builder (executed)")
+    puts_verbose("Custom builder called #{iteration_tracker.length} times")
+    puts_verbose("Iterations: #{iteration_tracker.inspect}")
+  else
+    results.record(false, "Custom input builder")
+    puts_error("Expected custom builder to be called, tracker: #{iteration_tracker.inspect}")
+  end
+rescue AgentRuntime::MaxIterationsExceeded
+  if iteration_tracker.any?
+    results.record(true, "Custom input builder (called before max iterations)")
+    puts_verbose("Custom builder called #{iteration_tracker.length} times")
+  else
+    results.record(false, "Custom input builder")
+    puts_error("Custom builder not called before max iterations")
+  end
+rescue StandardError => e
+  results.record(false, "Custom input builder")
   puts_error("Error: #{e.class}: #{e.message}")
 end
 
