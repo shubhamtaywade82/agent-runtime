@@ -196,7 +196,17 @@ To run tests:
 
 ```bash
 rake spec
+# or
+bundle exec rspec
 ```
+
+Test coverage reports are generated automatically. View the HTML report:
+```bash
+open coverage/index.html  # macOS
+xdg-open coverage/index.html  # Linux
+```
+
+See `TESTING.md` for detailed testing and coverage information.
 
 To run the console:
 
