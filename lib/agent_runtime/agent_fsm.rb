@@ -28,8 +28,6 @@ module AgentRuntime
       @decision = nil
 
       loop do
-        break if @fsm.terminal?
-
         case @fsm.state_name
         when :INTAKE
           handle_intake(initial_input)
@@ -48,6 +46,8 @@ module AgentRuntime
         when :HALT
           return handle_halt
         end
+
+        break if @fsm.terminal?
       end
     end
 
@@ -63,6 +63,10 @@ module AgentRuntime
     end
 
     # S1: PLAN - Single-shot planning using /generate
+    # Expects Planner#plan to return a Decision with params containing:
+    # - goal: string (required)
+    # - required_capabilities: array (optional, defaults to [])
+    # - initial_steps: array (optional, defaults to [])
     def handle_plan
       schema = @planner.instance_variable_get(:@schema)
       prompt_builder = @planner.instance_variable_get(:@prompt_builder)
@@ -73,10 +77,17 @@ module AgentRuntime
         state: @state.snapshot
       )
 
+      # Extract plan from Decision#params
+      # Contract: decision.params must contain :goal (required), :required_capabilities, :initial_steps (optional)
+      params = plan_result.params || {}
+      goal = params[:goal] || params["goal"] || @messages.first[:content]
+      required_capabilities = params[:required_capabilities] || params["required_capabilities"] || []
+      initial_steps = params[:initial_steps] || params["initial_steps"] || []
+
       @plan = {
-        goal: plan_result.params&.dig(:goal) || @messages.first[:content],
-        required_capabilities: plan_result.params&.dig(:required_capabilities) || [],
-        initial_steps: plan_result.params&.dig(:initial_steps) || []
+        goal: goal,
+        required_capabilities: required_capabilities,
+        initial_steps: initial_steps
       }
 
       @state.apply!({ plan: @plan })
@@ -131,29 +142,46 @@ module AgentRuntime
     def handle_observe
       tool_calls = @state.snapshot[:pending_tool_calls] || []
 
-      tool_results = tool_calls.map do |tool_call|
+      tool_results = []
+      parse_error = nil
+
+      tool_calls.each do |tool_call|
         # ollama-client tool_call format: { "function" => { "name" => "...", "arguments" => "..." } }
         function = tool_call[:function] || tool_call["function"] || {}
         action = function[:name] || function["name"] || tool_call[:name] || tool_call["name"]
 
         # Parse arguments (may be JSON string or hash)
-        args_str = function[:arguments] || function["arguments"] || tool_call[:arguments] || tool_call["arguments"] || "{}"
-        params = args_str.is_a?(String) ? JSON.parse(args_str) : (args_str || {})
+        args_str = function[:arguments] || function["arguments"] ||
+                   tool_call[:arguments] || tool_call["arguments"] || "{}"
+
+        begin
+          params = args_str.is_a?(String) ? JSON.parse(args_str) : (args_str || {})
+        rescue JSON::ParserError => e
+          # Malformed JSON in tool call arguments - transition to HALT
+          parse_error = e
+          break
+        end
 
         begin
           result = @tool_registry.call(action, params)
-          {
+          tool_results << {
             tool_call_id: tool_call[:id] || tool_call["id"] || SecureRandom.hex(8),
             name: action,
             result: result
           }
         rescue StandardError => e
-          {
+          tool_results << {
             tool_call_id: tool_call[:id] || tool_call["id"] || SecureRandom.hex(8),
             name: action,
             error: e.message
           }
         end
+      end
+
+      if parse_error
+        @fsm.transition_to(FSM::STATES[:HALT],
+                           reason: "Invalid tool call arguments (JSON parse error): #{parse_error.message}")
+        return
       end
 
       # Append tool results to messages
@@ -233,15 +261,29 @@ module AgentRuntime
       raise ExecutionError, "Agent halted: #{error_reason}"
     end
 
+    # Convert ToolRegistry tools to Ollama tool definitions
+    # Returns array of tool definitions in Ollama format
+    # Override this method to provide custom tool schemas
     def build_tools_for_chat
-      # Convert tool_registry tools to ollama-client Tool format
-      # ollama-client expects Ollama::Tool objects or array of Tool objects
-      # For now, return nil - tools can be passed directly if needed
-      # In production, you'd convert your ToolRegistry to Ollama::Tool objects
-      # Example:
-      #   tools = @tool_registry.instance_variable_get(:@tools)
-      #   tools.map { |name, callable| build_ollama_tool(name, callable) }
-      nil
+      tools_hash = @tool_registry.instance_variable_get(:@tools) || {}
+      return [] if tools_hash.empty?
+
+      # Basic tool definition format for Ollama
+      # Users should override this method to provide proper JSON schemas for each tool
+      tools_hash.keys.map do |tool_name|
+        {
+          type: "function",
+          function: {
+            name: tool_name.to_s,
+            description: "Tool: #{tool_name}",
+            parameters: {
+              type: "object",
+              properties: {},
+              additionalProperties: true
+            }
+          }
+        }
+      end
     end
 
     def extract_tool_calls(response)

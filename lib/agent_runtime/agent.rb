@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module AgentRuntime
+  # Simple agent implementation with step-by-step execution and multi-step loops
   class Agent
     def initialize(planner:, policy:, executor:, state:, audit_log: nil, max_iterations: 50)
       @planner = planner
@@ -63,10 +64,12 @@ module AgentRuntime
           result: result
         )
 
+        # Always set final_result before checking termination
+        final_result = result
+
         break if terminated?(decision, result)
 
         current_input = input_builder ? input_builder.call(result, iteration) : build_next_input(result, iteration)
-        final_result = result
       end
 
       final_result || { done: true, iterations: iteration }
@@ -78,7 +81,7 @@ module AgentRuntime
       decision.action == "finish" || result[:done] == true
     end
 
-    def build_next_input(result, iteration)
+    def build_next_input(result, _iteration)
       "Continue based on: #{result.inspect}"
     end
   end

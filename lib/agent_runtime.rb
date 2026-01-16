@@ -15,5 +15,7 @@ require_relative "agent_runtime/audit_log"
 require_relative "agent_runtime/errors"
 require_relative "agent_runtime/fsm"
 
+# AgentRuntime provides a deterministic, policy-driven runtime for building
+# tool-using LLM agents with explicit state, policy enforcement, and auditability.
 module AgentRuntime
 end

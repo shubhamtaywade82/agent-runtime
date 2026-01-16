@@ -3,18 +3,18 @@
 require "spec_helper"
 
 RSpec.describe AgentRuntime::Planner do
-  let(:mock_client) { instance_double("Ollama::Client") }
+  let(:mock_client) { instance_double(Ollama::Client) }
   let(:schema) do
     {
       "type" => "object",
-      "required" => ["action", "params"],
+      "required" => %w[action params],
       "properties" => {
         "action" => { "type" => "string" },
         "params" => { "type" => "object", "additionalProperties" => true }
       }
     }
   end
-  let(:prompt_builder) { ->(input:, state:) { "Prompt: #{input}" } }
+  let(:prompt_builder) { ->(input:, state: nil) { "Prompt: #{input}" } } # rubocop:disable Lint/UnusedBlockArgument
   let(:planner) { described_class.new(client: mock_client, schema: schema, prompt_builder: prompt_builder) }
 
   describe "#plan" do

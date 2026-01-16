@@ -184,7 +184,6 @@ Examples are not part of the public API.
 - `FSM_WORKFLOWS.md`
 - `SCHEMA_GUIDE.md`
 - `PREREQUISITES.md`
-- `CONSOLE_TESTING.md`
 
 ## Development
 After checking out the repo, run:

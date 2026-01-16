@@ -5,9 +5,9 @@ require "spec_helper"
 RSpec.describe AgentRuntime::ToolRegistry do
   let(:tools) do
     described_class.new({
-      "fetch" => ->(**args) { { data: "fetched", args: args } },
-      "execute" => ->(**args) { { result: "executed" } }
-    })
+                          "fetch" => ->(**args) { { data: "fetched", args: args } },
+                          "execute" => ->(**_args) { { result: "executed" } }
+                        })
   end
 
   describe "#call" do
