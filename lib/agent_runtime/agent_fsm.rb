@@ -4,9 +4,43 @@ require "json"
 require "securerandom"
 
 module AgentRuntime
-  # Agentic workflow implementation using formal FSM
-  # Maps directly to the canonical agentic workflow specification
+  # Agentic workflow implementation using formal FSM.
+  #
+  # Maps directly to the canonical agentic workflow specification with 8 states:
+  # - INTAKE: Normalize input, initialize state
+  # - PLAN: Single-shot planning using /generate
+  # - DECIDE: Make bounded decision (continue vs stop)
+  # - EXECUTE: LLM proposes next actions using /chat (looping state)
+  # - OBSERVE: Execute tools, inject real-world results
+  # - LOOP_CHECK: Control continuation
+  # - FINALIZE: Produce terminal output (terminal state)
+  # - HALT: Abort safely (terminal state)
+  #
+  # This implementation provides a complete agentic workflow with explicit state
+  # transitions, tool execution, and audit logging.
+  #
+  # @example Basic usage
+  #   agent_fsm = AgentFSM.new(
+  #     planner: planner,
+  #     policy: policy,
+  #     executor: executor,
+  #     state: state,
+  #     tool_registry: tools
+  #   )
+  #   result = agent_fsm.run(initial_input: "Analyze this data")
+  #
+  # @see FSM
+  # @see Agent
   class AgentFSM
+    # Initialize a new AgentFSM instance.
+    #
+    # @param planner [Planner] The planner for generating plans and chat responses
+    # @param policy [Policy] The policy validator for decisions
+    # @param executor [Executor] The executor for tool calls (currently unused, tools called directly)
+    # @param state [State] The state manager for agent state
+    # @param tool_registry [ToolRegistry] The registry containing available tools
+    # @param audit_log [AuditLog, nil] Optional audit logger for recording decisions
+    # @param max_iterations [Integer] Maximum number of iterations before raising an error (default: 50)
     def initialize(planner:, policy:, executor:, state:, tool_registry:, audit_log: nil, max_iterations: 50)
       @planner = planner
       @policy = policy
@@ -20,7 +54,26 @@ module AgentRuntime
       @decision = nil
     end
 
-    # Run the complete agentic workflow from INTAKE to FINALIZE/HALT
+    # Run the complete agentic workflow from INTAKE to FINALIZE/HALT.
+    #
+    # Executes the full FSM workflow, transitioning through all states until
+    # reaching a terminal state (FINALIZE or HALT). The workflow handles planning,
+    # decision-making, tool execution, and observation in a structured loop.
+    #
+    # @param initial_input [String] The initial input to start the workflow
+    # @return [Hash] Final result hash containing:
+    #   - done: Boolean indicating completion status
+    #   - iterations: Number of iterations executed
+    #   - state: Final state snapshot
+    #   - fsm_history: Array of state transition history
+    #   - final_message: Optional final message content (if FINALIZE)
+    #   - error: Error reason (if HALT)
+    # @raise [ExecutionError] If the workflow halts due to an error
+    # @raise [MaxIterationsExceeded] If maximum iterations are exceeded
+    #
+    # @example
+    #   result = agent_fsm.run(initial_input: "Find weather and send email")
+    #   # => { done: true, iterations: 3, state: {...}, fsm_history: [...] }
     def run(initial_input:)
       @fsm.reset
       @messages = []
@@ -51,22 +104,41 @@ module AgentRuntime
       end
     end
 
+    # @!attribute [r] fsm
+    #   @return [FSM] The finite state machine instance
+    # @!attribute [r] messages
+    #   @return [Array<Hash>] Array of message hashes with :role and :content
+    # @!attribute [r] plan
+    #   @return [Hash, nil] The plan hash with :goal, :required_capabilities, :initial_steps
+    # @!attribute [r] decision
+    #   @return [Hash, nil] The decision hash with :continue and :reason
     attr_reader :fsm, :messages, :plan, :decision
 
     private
 
-    # S0: INTAKE - Normalize input, initialize state
+    # S0: INTAKE - Normalize input, initialize state.
+    #
+    # Initializes the workflow by creating the initial user message and
+    # setting up the state with goal and timestamp.
+    #
+    # @param input [String] The initial input string
+    # @return [void]
     def handle_intake(input)
       @messages = [{ role: "user", content: input }]
       @state.apply!({ goal: input, started_at: Time.now.utc.iso8601 })
       @fsm.transition_to(FSM::STATES[:PLAN], reason: "Input normalized")
     end
 
-    # S1: PLAN - Single-shot planning using /generate
-    # Expects Planner#plan to return a Decision with params containing:
+    # S1: PLAN - Single-shot planning using /generate.
+    #
+    # Generates a plan using the planner's plan method. Expects Planner#plan
+    # to return a Decision with params containing:
     # - goal: string (required)
     # - required_capabilities: array (optional, defaults to [])
     # - initial_steps: array (optional, defaults to [])
+    #
+    # @return [void]
+    # @raise [ExecutionError] If planner is missing schema or prompt_builder
     def handle_plan
       schema = @planner.instance_variable_get(:@schema)
       prompt_builder = @planner.instance_variable_get(:@prompt_builder)
@@ -97,7 +169,15 @@ module AgentRuntime
       @fsm.transition_to(FSM::STATES[:HALT], reason: "Plan failed: #{e.message}")
     end
 
-    # S2: DECIDE - Make bounded decision (continue vs stop)
+    # S2: DECIDE - Make bounded decision (continue vs stop).
+    #
+    # Makes a simple decision based on plan validity. If plan exists and has
+    # a goal, continues to EXECUTE. Otherwise, halts the workflow.
+    #
+    # In real implementations, this could use LLM or rule-based logic for
+    # more sophisticated decision-making.
+    #
+    # @return [void]
     def handle_decide
       # Simple decision: if plan exists and is valid, continue to EXECUTE
       # In real implementations, this could use LLM or rule-based logic
@@ -110,8 +190,14 @@ module AgentRuntime
       end
     end
 
-    # S3: EXECUTE - LLM proposes next actions using /chat
-    # This is the ONLY looping state
+    # S3: EXECUTE - LLM proposes next actions using /chat.
+    #
+    # This is the ONLY looping state. Uses chat_raw to get full response with
+    # tool_calls. If tool calls are present, transitions to OBSERVE. Otherwise,
+    # transitions to FINALIZE.
+    #
+    # @return [void]
+    # @raise [ExecutionError] If execution fails
     def handle_execute
       @fsm.increment_iteration
 
@@ -138,7 +224,14 @@ module AgentRuntime
       @fsm.transition_to(FSM::STATES[:HALT], reason: "Execution failed: #{e.message}")
     end
 
-    # S4: OBSERVE - Execute tools, inject real-world results
+    # S4: OBSERVE - Execute tools, inject real-world results.
+    #
+    # Executes pending tool calls from the EXECUTE state. Parses tool call
+    # arguments (handling JSON strings), calls tools via the registry, and
+    # appends results to messages. Handles errors gracefully by including
+    # error messages in tool results.
+    #
+    # @return [void]
     def handle_observe
       tool_calls = @state.snapshot[:pending_tool_calls] || []
 
@@ -202,7 +295,13 @@ module AgentRuntime
       @fsm.transition_to(FSM::STATES[:LOOP_CHECK], reason: "Tools executed, #{tool_results.size} results")
     end
 
-    # S5: LOOP_CHECK - Control continuation
+    # S5: LOOP_CHECK - Control continuation.
+    #
+    # Checks guards for continuation: max iterations, policy violations, etc.
+    # Uses a simple heuristic: if observations exist, continue to EXECUTE.
+    # Otherwise, finalize.
+    #
+    # @return [void]
     def handle_loop_check
       # Check guards: max iterations, policy violations, etc.
       if @fsm.iteration_count >= @fsm.instance_variable_get(:@max_iterations)
@@ -218,7 +317,12 @@ module AgentRuntime
       end
     end
 
-    # S6: FINALIZE - Produce terminal output
+    # S6: FINALIZE - Produce terminal output.
+    #
+    # Produces the final result hash with completion status, iterations,
+    # state snapshot, and FSM history. Records audit log entry.
+    #
+    # @return [Hash] Final result hash with done: true
     def handle_finalize
       # Optional: call LLM for summary (no tool calls allowed)
       final_message = @messages.last
@@ -240,7 +344,13 @@ module AgentRuntime
       result
     end
 
-    # S7: HALT - Abort safely
+    # S7: HALT - Abort safely.
+    #
+    # Handles workflow halt due to error. Produces error result hash and
+    # records audit log entry, then raises ExecutionError.
+    #
+    # @return [void]
+    # @raise [ExecutionError] Always raises with halt reason
     def handle_halt
       error_reason = @fsm.history.last&.dig(:reason) || "Unknown error"
 
@@ -261,9 +371,33 @@ module AgentRuntime
       raise ExecutionError, "Agent halted: #{error_reason}"
     end
 
-    # Convert ToolRegistry tools to Ollama tool definitions
-    # Returns array of tool definitions in Ollama format
-    # Override this method to provide custom tool schemas
+    # Convert ToolRegistry tools to Ollama tool definitions.
+    #
+    # Returns array of tool definitions in Ollama format. This is a basic
+    # implementation that creates minimal tool schemas. Override this method
+    # to provide proper JSON schemas for each tool.
+    #
+    # @return [Array<Hash>] Array of tool definition hashes in Ollama format
+    #
+    # @example Override to provide custom schemas
+    #   def build_tools_for_chat
+    #     [
+    #       {
+    #         type: "function",
+    #         function: {
+    #           name: "search",
+    #           description: "Search the web",
+    #           parameters: {
+    #             type: "object",
+    #             properties: {
+    #               query: { type: "string", description: "Search query" }
+    #             },
+    #             required: ["query"]
+    #           }
+    #         }
+    #       }
+    #     ]
+    #   end
     def build_tools_for_chat
       tools_hash = @tool_registry.instance_variable_get(:@tools) || {}
       return [] if tools_hash.empty?
@@ -286,9 +420,15 @@ module AgentRuntime
       end
     end
 
+    # Extract tool calls from ollama-client chat_raw() response.
+    #
+    # Handles various response formats and extracts tool_calls array.
+    # Supports both symbol and string keys, and checks multiple possible
+    # locations in the response hash.
+    #
+    # @param response [Hash, Object] The chat_raw response (may be hash or object with tool_calls method)
+    # @return [Array] Array of tool call hashes, empty array if none found
     def extract_tool_calls(response)
-      # Extract tool calls from ollama-client chat_raw() response
-      # chat_raw returns: { "message" => { "tool_calls" => [...] } }
       if response.is_a?(Hash)
         # ollama-client chat_raw returns tool_calls in message.tool_calls
         tool_calls = response.dig(:message, :tool_calls) || response.dig("message", "tool_calls")
