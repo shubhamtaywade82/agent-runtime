@@ -171,11 +171,24 @@ result = agent_fsm.run(initial_input: "Research Ruby memory management")
 - Tool execution happens only in `Executor`.
 - Tool results are recorded in state and (for FSM) injected as `role: "tool"`.
 
-## Examples (domain-specific and optional)
-- `examples/console_example.rb`: minimal console usage.
-- `examples/fixed_console_example.rb`: schema-correct console usage.
-- `examples/rails_example/`: Rails integration example.
-- `examples/dhanhq_example.rb`: domain-specific example requiring extra deps.
+## Examples
+
+### Quick Start
+**Start here**: `examples/complete_working_example.rb` - A complete, runnable example demonstrating all features.
+
+```bash
+# Make sure Ollama is running: ollama serve
+ruby examples/complete_working_example.rb
+```
+
+### Available Examples
+- `examples/complete_working_example.rb` ⭐ - **Complete working example** (recommended starting point)
+- `examples/fixed_console_example.rb` - Minimal example for console use
+- `examples/console_example.rb` - Basic console example
+- `examples/rails_example/` - Rails integration example
+- `examples/dhanhq_example.rb` - Domain-specific example (requires DhanHQ gem)
+
+See `examples/README.md` for detailed documentation on all examples.
 
 Examples are not part of the public API.
 
