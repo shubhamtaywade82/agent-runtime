@@ -83,8 +83,6 @@ module AgentRuntime
       STATES.key(@state) || "UNKNOWN"
     end
 
-    private
-
     # Valid transitions based on FSM specification
     # INTAKE → PLAN
     # PLAN → DECIDE | HALT

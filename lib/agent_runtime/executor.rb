@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module AgentRuntime
+  # Executes tool calls via ToolRegistry based on agent decisions
   class Executor
     def initialize(tool_registry:)
       @tools = tool_registry

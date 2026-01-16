@@ -9,10 +9,12 @@ require "ollama_client"
 require "dhan_hq"
 
 # Load DhanHQ tools from ollama-client examples
-tools_path = "/home/nemesis/project/ollama-client/examples/dhanhq_tools.rb"
-unless File.exist?(tools_path)
-  puts "❌ DhanHQ tools not found at: #{tools_path}"
-  puts "   Make sure ollama-client examples are available"
+# Set DHANHQ_TOOLS_PATH environment variable to point to dhanhq_tools.rb
+tools_path = ENV.fetch("DHANHQ_TOOLS_PATH", nil)
+unless tools_path && File.exist?(tools_path)
+  puts "❌ DhanHQ tools not found"
+  puts "   Set DHANHQ_TOOLS_PATH environment variable to point to dhanhq_tools.rb"
+  puts "   Example: export DHANHQ_TOOLS_PATH=/path/to/ollama-client/examples/dhanhq_tools.rb"
   exit 1
 end
 
@@ -35,78 +37,78 @@ end
 
 # 1. Set up DhanHQ tools
 tools = AgentRuntime::ToolRegistry.new({
-  "find_instrument" => ->(**args) {
-    DhanHQDataTools.find_instrument(**compact_kwargs(symbol: args[:symbol]))
-  },
-  "get_market_quote" => ->(**args) {
-    DhanHQDataTools.get_market_quote(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: args[:security_id]
-    ))
-  },
-  "get_live_ltp" => ->(**args) {
-    DhanHQDataTools.get_live_ltp(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: args[:security_id]
-    ))
-  },
-  "get_market_depth" => ->(**args) {
-    DhanHQDataTools.get_market_depth(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: args[:security_id]
-    ))
-  },
-  "get_historical_data" => ->(**args) {
-    normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
-    DhanHQDataTools.get_historical_data(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: normalized_security_id,
-      from_date: args[:from_date],
-      to_date: args[:to_date],
-      interval: args[:interval],
-      expiry_code: args[:expiry_code],
-      calculate_indicators: args[:calculate_indicators] || false
-    ))
-  },
-  "get_expiry_list" => ->(**args) {
-    normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
-    DhanHQDataTools.get_expiry_list(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: normalized_security_id
-    ))
-  },
-  "get_option_chain" => ->(**args) {
-    normalized_security_id = args[:security_id] ? args[:security_id].to_i : nil
-    normalized_strikes_count = (args[:strikes_count] || 5).to_i
-    DhanHQDataTools.get_option_chain(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      symbol: args[:symbol],
-      security_id: normalized_security_id,
-      expiry: args[:expiry],
-      strikes_count: normalized_strikes_count
-    ))
-  },
-  "get_expired_options_data" => ->(**args) {
-    DhanHQDataTools.get_expired_options_data(**compact_kwargs(
-      exchange_segment: args[:exchange_segment],
-      expiry_date: args[:expiry_date],
-      symbol: args[:symbol],
-      security_id: args[:security_id],
-      interval: args[:interval],
-      instrument: args[:instrument],
-      expiry_flag: args[:expiry_flag],
-      expiry_code: args[:expiry_code],
-      strike: args[:strike],
-      drv_option_type: args[:drv_option_type],
-      required_data: args[:required_data]
-    ))
-  }
-})
+                                         "find_instrument" => lambda { |**args|
+                                           DhanHQDataTools.find_instrument(**compact_kwargs(symbol: args[:symbol]))
+                                         },
+                                         "get_market_quote" => lambda { |**args|
+                                           DhanHQDataTools.get_market_quote(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: args[:security_id]
+                                           ))
+                                         },
+                                         "get_live_ltp" => lambda { |**args|
+                                           DhanHQDataTools.get_live_ltp(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: args[:security_id]
+                                           ))
+                                         },
+                                         "get_market_depth" => lambda { |**args|
+                                           DhanHQDataTools.get_market_depth(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: args[:security_id]
+                                           ))
+                                         },
+                                         "get_historical_data" => lambda { |**args|
+                                           normalized_security_id = args[:security_id]&.to_i
+                                           DhanHQDataTools.get_historical_data(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: normalized_security_id,
+                                             from_date: args[:from_date],
+                                             to_date: args[:to_date],
+                                             interval: args[:interval],
+                                             expiry_code: args[:expiry_code],
+                                             calculate_indicators: args[:calculate_indicators] || false
+                                           ))
+                                         },
+                                         "get_expiry_list" => lambda { |**args|
+                                           normalized_security_id = args[:security_id]&.to_i
+                                           DhanHQDataTools.get_expiry_list(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: normalized_security_id
+                                           ))
+                                         },
+                                         "get_option_chain" => lambda { |**args|
+                                           normalized_security_id = args[:security_id]&.to_i
+                                           normalized_strikes_count = (args[:strikes_count] || 5).to_i
+                                           DhanHQDataTools.get_option_chain(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             symbol: args[:symbol],
+                                             security_id: normalized_security_id,
+                                             expiry: args[:expiry],
+                                             strikes_count: normalized_strikes_count
+                                           ))
+                                         },
+                                         "get_expired_options_data" => lambda { |**args|
+                                           DhanHQDataTools.get_expired_options_data(**compact_kwargs(
+                                             exchange_segment: args[:exchange_segment],
+                                             expiry_date: args[:expiry_date],
+                                             symbol: args[:symbol],
+                                             security_id: args[:security_id],
+                                             interval: args[:interval],
+                                             instrument: args[:instrument],
+                                             expiry_flag: args[:expiry_flag],
+                                             expiry_code: args[:expiry_code],
+                                             strike: args[:strike],
+                                             drv_option_type: args[:drv_option_type],
+                                             required_data: args[:required_data]
+                                           ))
+                                         }
+                                       })
 
 # 2. Configure Ollama client
 config = Ollama::Config.new
@@ -116,13 +118,13 @@ client = Ollama::Client.new(config: config)
 # 3. Create planner with DhanHQ-specific schema
 schema = {
   "type" => "object",
-  "required" => ["action", "params", "confidence"],
+  "required" => %w[action params confidence],
   "properties" => {
     "action" => {
       "type" => "string",
       "enum" => %w[find_instrument get_market_quote get_live_ltp get_market_depth
-                  get_historical_data get_expiry_list get_option_chain
-                  get_expired_options_data finish],
+                   get_historical_data get_expiry_list get_option_chain
+                   get_expired_options_data finish],
       "description" => "The DhanHQ API action to execute"
     },
     "params" => {
@@ -198,7 +200,7 @@ test_cases = [
 ]
 
 test_cases.each do |test_input|
-  puts "\n" + "-" * 60
+  puts "\n#{"-" * 60}"
   puts "Test: #{test_input}"
   puts "-" * 60
 
@@ -221,6 +223,6 @@ test_cases.each do |test_input|
   sleep(1) # Rate limiting between requests
 end
 
-puts "\n" + "=" * 60
+puts "\n#{"=" * 60}"
 puts "Testing complete!"
 puts "=" * 60

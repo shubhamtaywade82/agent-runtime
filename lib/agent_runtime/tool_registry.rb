@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module AgentRuntime
+  # Registry mapping tool names to Ruby callables
   class ToolRegistry
     def initialize(tools = {})
       @tools = tools

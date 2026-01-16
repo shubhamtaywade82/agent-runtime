@@ -1,8 +1,56 @@
+plugins:
+  - rubocop-rake
+  - rubocop-rspec
+  - rubocop-performance
+  - rubocop-thread_safety
+
 AllCops:
   TargetRubyVersion: 3.2
+  SuggestExtensions: true
+  NewCops: enable
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Metrics/MethodLength:
+  Exclude:
+    - "spec/**/*"
+    - "examples/**/*"
+    - "lib/agent_runtime/agent.rb"
+    - "lib/agent_runtime/agent_fsm.rb"
+    - "lib/agent_runtime/audit_log.rb"
+
+Metrics/ClassLength:
+  Exclude:
+    - "examples/**/*"
+    - "lib/agent_runtime/agent_fsm.rb"
+
+Metrics/ParameterLists:
+  Exclude:
+    - "lib/agent_runtime/agent.rb"
+    - "lib/agent_runtime/agent_fsm.rb"
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - "lib/agent_runtime/agent_fsm.rb"
+
+Metrics/AbcSize:
+  Exclude:
+    - "lib/agent_runtime/agent_fsm.rb"
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - "lib/agent_runtime/agent_fsm.rb"
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+ThreadSafety/ClassInstanceVariable:
+  Exclude:
+    - "examples/**/*"

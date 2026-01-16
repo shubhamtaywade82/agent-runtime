@@ -9,16 +9,17 @@ require "ollama_client"
 
 # 1. Set up tools
 tools = AgentRuntime::ToolRegistry.new({
-  "fetch" => ->(**args) {
-    { data: "Fetched data for: #{args.inspect}", timestamp: Time.now.utc.iso8601 }
-  },
-  "execute" => ->(**args) {
-    { result: "Executed action: #{args.inspect}", success: true }
-  },
-  "analyze" => ->(**args) {
-    { analysis: "Analysis result for: #{args.inspect}", confidence: 0.85 }
-  }
-})
+                                         "fetch" => lambda { |**args|
+                                           { data: "Fetched data for: #{args.inspect}",
+                                             timestamp: Time.now.utc.iso8601 }
+                                         },
+                                         "execute" => lambda { |**args|
+                                           { result: "Executed action: #{args.inspect}", success: true }
+                                         },
+                                         "analyze" => lambda { |**args|
+                                           { analysis: "Analysis result for: #{args.inspect}", confidence: 0.85 }
+                                         }
+                                       })
 
 # 2. Configure Ollama client
 client = Ollama::Client.new
@@ -28,11 +29,11 @@ planner = AgentRuntime::Planner.new(
   client: client,
   schema: {
     "type" => "object",
-    "required" => ["action", "params", "confidence"],
+    "required" => %w[action params confidence],
     "properties" => {
       "action" => {
         "type" => "string",
-        "enum" => ["fetch", "execute", "analyze", "finish"],
+        "enum" => %w[fetch execute analyze finish],
         "description" => "The action to take"
       },
       "params" => {
@@ -48,7 +49,7 @@ planner = AgentRuntime::Planner.new(
       }
     }
   },
-  prompt_builder: ->(input:, state:) {
+  prompt_builder: lambda { |input:, state:|
     <<~PROMPT
       You are a helpful assistant. Analyze the user's request and decide on an action.
 
@@ -104,12 +105,12 @@ rescue Ollama::NotFoundError => e
   puts "\n❌ Model not found: #{e.message}"
 rescue AgentRuntime::PolicyViolation => e
   puts "\n❌ Policy violation: #{e.message}"
-rescue => e
+rescue StandardError => e
   puts "\n❌ Error: #{e.class}: #{e.message}"
   puts e.backtrace.first(5)
 end
 
-puts "\n" + "=" * 60
+puts "\n#{"=" * 60}"
 puts "Agent state after step:"
 puts state.snapshot.inspect
 puts "=" * 60
