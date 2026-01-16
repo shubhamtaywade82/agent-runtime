@@ -11,15 +11,13 @@ SimpleCov.start do
 
   # Minimum coverage threshold (warn only, doesn't fail build)
   # Set COVERAGE_THRESHOLD environment variable to enforce a threshold
-  if ENV["COVERAGE_THRESHOLD"]
-    minimum_coverage ENV["COVERAGE_THRESHOLD"].to_f
-  end
+  minimum_coverage ENV["COVERAGE_THRESHOLD"].to_f if ENV["COVERAGE_THRESHOLD"]
 
   # Coverage formatters
   formatter SimpleCov::Formatter::MultiFormatter.new([
-    SimpleCov::Formatter::SimpleFormatter,
-    SimpleCov::Formatter::HTMLFormatter
-  ])
+                                                       SimpleCov::Formatter::SimpleFormatter,
+                                                       SimpleCov::Formatter::HTMLFormatter
+                                                     ])
 end
 
 require "agent_runtime"
