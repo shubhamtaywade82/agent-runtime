@@ -27,6 +27,20 @@ tool execution, and explicit state. It does not ship domain logic.
 
 If you violate any rule above, you are not using this gem correctly.
 
+## Narrative overview (kept here, kept strict)
+AgentRuntime is a domain-agnostic runtime that separates reasoning from
+authority:
+- LLM reasoning happens via `Planner` only.
+- Ruby owns policy and execution.
+- Tools are gated and executed outside the LLM.
+- State is explicit and inspectable.
+- Failures are visible via explicit errors and optional audit logs.
+
+Architecture (conceptual):
+Your application → AgentRuntime → `ollama-client` → Ollama server
+
+This overview is informative only. The strict rules above are the contract.
+
 ## Core components (SRP map)
 - `Planner`: LLM interface (`generate`, `chat`, `chat_raw`). No tools. No side effects.
 - `Policy`: validates decisions before execution.
