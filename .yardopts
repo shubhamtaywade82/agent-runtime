@@ -1,0 +1,5 @@
+--no-private
+--markup markdown
+--title "AgentRuntime API Documentation"
+--readme README.md
+lib/**/*.rb

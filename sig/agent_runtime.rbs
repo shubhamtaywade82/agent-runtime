@@ -33,8 +33,10 @@ module AgentRuntime
   end
 
   class Planner
-    def initialize: (untyped client, Hash[untyped, untyped] schema, Proc prompt_builder) -> void
+    def initialize: (untyped client, ?Hash[untyped, untyped] schema, ?Proc prompt_builder) -> void
     def plan: (String input:, Hash[untyped, untyped] state:) -> Decision
+    def chat: (Array[Hash[untyped, untyped]] messages:, ?untyped tools, **untyped) -> Hash[untyped, untyped]
+    def chat_raw: (Array[Hash[untyped, untyped]] messages:, ?untyped tools, **untyped) -> Hash[untyped, untyped]
   end
 
   class Policy
@@ -55,5 +57,34 @@ module AgentRuntime
     def initialize: (Planner planner:, Policy policy:, Executor executor:, State state:, ?AuditLog audit_log, ?Integer max_iterations) -> void
     def step: (String input:) -> Hash[untyped, untyped]
     def run: (String initial_input:, ?Proc input_builder) -> Hash[untyped, untyped]
+  end
+
+  class FSM
+    def initialize: (?Integer max_iterations) -> void
+    def state: () -> Integer
+    def iteration_count: () -> Integer
+    def history: () -> Array[Hash[untyped, untyped]]
+    def intake?: () -> bool
+    def plan?: () -> bool
+    def decide?: () -> bool
+    def execute?: () -> bool
+    def observe?: () -> bool
+    def loop_check?: () -> bool
+    def finalize?: () -> bool
+    def halt?: () -> bool
+    def terminal?: () -> bool
+    def transition_to: (Integer new_state, ?String reason) -> void
+    def increment_iteration: () -> void
+    def reset: () -> void
+    def state_name: () -> Symbol
+  end
+
+  class AgentFSM
+    def initialize: (Planner planner:, Policy policy:, Executor executor:, State state:, ToolRegistry tool_registry:, ?AuditLog audit_log, ?Integer max_iterations) -> void
+    def run: (String initial_input:) -> Hash[untyped, untyped]
+    def fsm: () -> FSM
+    def messages: () -> Array[Hash[untyped, untyped]]
+    def plan: () -> Hash[untyped, untyped]?
+    def decision: () -> Hash[untyped, untyped]?
   end
 end

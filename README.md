@@ -1,51 +1,73 @@
 # AgentRuntime
 
-> A **deterministic, policy-driven runtime** for building safe, tool-using LLM agents.
+Deterministic, policy-driven runtime for tool-using LLM agents in Ruby.
 
-AgentRuntime is a domain-agnostic agent runtime that provides explicit state management, policy enforcement, and tool execution for LLM-based agents. It separates reasoning (LLM) from authority (Ruby) and gates all side effects.
+AgentRuntime is a control plane. It coordinates planning, policy validation,
+tool execution, and explicit state. It does not ship domain logic.
 
-## Philosophy
+## What this gem is
+- A small runtime to coordinate LLM decisions with Ruby tool execution.
+- A formal FSM workflow (`AgentFSM`) with explicit states and history.
 
-AgentRuntime is **not another "agent framework"**. It's a reusable, deterministic runtime where:
+## What this gem is not
+- Not a domain toolkit (no broker APIs, HTTP clients, or storage).
+- Not a prompt library.
+- Not a memory system.
 
-* **LLM = reasoning only** (stateless planning)
-* **Ruby = authority** (policy enforcement)
-* **Side effects = gated** (tool registry)
-* **State = explicit** (serializable, visible)
-* **Failures = visible** (audit log, clear errors)
+## Strict usage rules (non-negotiable)
+- Use `/generate` only for planning/decision outputs (`Planner#plan`).
+- Use `/chat` only during execution/finalization (`Planner#chat_raw`, `Planner#chat`).
+- The LLM never executes tools. Tools are Ruby callables and run in `Executor`.
+- Tool results are injected as `role: "tool"` messages only after execution.
+- Only `EXECUTE` loops. All other states are single-shot.
+- Termination happens only on explicit signals:
+  `decision.action == "finish"`, `result[:done] == true`, or `MaxIterationsExceeded`.
+- This gem does not add retries or streaming. Retry/streaming policy lives in
+  `ollama-client`.
 
-## Architecture
+If you violate any rule above, you are not using this gem correctly.
 
-```
-┌────────────────────────────┐
-│  Your Application          │  ← trading, code patching, infra, CI, etc.
-├────────────────────────────┤
-│  Agent Runtime             │  ← planner + policy + executor + state
-├────────────────────────────┤
-│  ollama-client             │  ← safe LLM calls, schemas, retries
-├────────────────────────────┤
-│  Ollama Server             │  ← models, inference
-└────────────────────────────┘
-```
+## Narrative overview (kept here, kept strict)
+AgentRuntime is a domain-agnostic runtime that separates reasoning from
+authority:
+- LLM reasoning happens via `Planner` only.
+- Ruby owns policy and execution.
+- Tools are gated and executed outside the LLM.
+- State is explicit and inspectable.
+- Failures are visible via explicit errors and optional audit logs.
 
-## Core Abstractions
+Architecture (conceptual):
+Your application → AgentRuntime → `ollama-client` → Ollama server
 
-The framework provides minimal but complete primitives:
+This overview is informative only. The strict rules above are the contract.
 
-* **Agent** - Orchestrates the execution loop
-* **Planner** - Stateless LLM reasoning (uses `ollama-client`)
-* **Policy** - Hard constraints, Ruby-only (non-negotiable safety)
-* **ToolRegistry** - What can be executed
-* **Executor** - Tool execution loop
-* **State** - Explicit, serializable state
-* **AuditLog** - Optional but critical for debugging
+## Core components (SRP map)
+- `Planner`: LLM interface (`generate`, `chat`, `chat_raw`). No tools. No side effects.
+- `Policy`: validates decisions before execution.
+- `Executor`: executes tools via `ToolRegistry` only.
+- `ToolRegistry`: maps tool names to Ruby callables.
+- `State`: explicit, serializable state.
+- `Agent`: simple decision loop using `Planner#plan` and tools.
+- `AgentFSM`: formal FSM with explicit states and transition history.
+- `AuditLog`: optional logging of decisions and results.
+
+## API mapping
+| Concern | Method | LLM endpoint | Where it belongs |
+| --- | --- | --- | --- |
+| Planning / decisions | `Planner#plan` | `/api/generate` | PLAN |
+| Execution / tool calls | `Planner#chat_raw` | `/api/chat` | EXECUTE |
+| Final response (optional) | `Planner#chat` | `/api/chat` | FINALIZE |
+
+`Executor` never calls the LLM.
+
+## Prerequisites
+`agent_runtime` depends on `ollama-client`. See `PREREQUISITES.md`.
 
 ## Installation
-
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "agent-runtime"
+gem "agent_runtime"
 ```
 
 And then execute:
@@ -57,110 +79,126 @@ bundle install
 Or install it yourself as:
 
 ```bash
-gem install agent-runtime
+gem install agent_runtime
 ```
 
 ## Usage
 
-### Basic Example
+### Single-step agent (`Agent#step`)
+Use this for one-shot decisions or when you control the loop externally.
 
 ```ruby
 require "agent_runtime"
-require "ollama"
+require "ollama_client"
 
-# 1. Set up tools
 tools = AgentRuntime::ToolRegistry.new({
-  "fetch" => ->(**args) { fetch_data(args) },
-  "execute" => ->(**args) { perform_action(args) }
+  "fetch" => ->(**args) { { data: "fetched", args: args } },
+  "execute" => ->(**args) { { result: "executed", args: args } }
 })
 
-# 2. Configure planner (uses ollama-client)
 client = Ollama::Client.new
-schema = {
-  "action" => "string",
-  "params" => "object",
-  "confidence" => "number"
-}
-planner = AgentRuntime::Planner.new(client: client, schema: schema)
 
-# 3. Define policy
-policy = AgentRuntime::Policy.new(
-  allowed_actions: %w[fetch execute finish],
-  min_confidence: 0.7
+schema = {
+  "type" => "object",
+  "required" => ["action", "params", "confidence"],
+  "properties" => {
+    "action" => { "type" => "string", "enum" => ["fetch", "execute", "finish"] },
+    "params" => { "type" => "object", "additionalProperties" => true },
+    "confidence" => { "type" => "number", "minimum" => 0, "maximum" => 1 }
+  }
+}
+
+planner = AgentRuntime::Planner.new(
+  client: client,
+  schema: schema,
+  prompt_builder: ->(input:, state:) {
+    "User request: #{input}\nContext: #{state.to_json}"
+  }
 )
 
-# 4. Initialize state
-state = AgentRuntime::State.new
-
-# 5. Create agent
 agent = AgentRuntime::Agent.new(
   planner: planner,
+  policy: AgentRuntime::Policy.new,
   executor: AgentRuntime::Executor.new(tool_registry: tools),
-  policy: policy,
-  state: state,
-  audit: AgentRuntime::AuditLog.new
+  state: AgentRuntime::State.new,
+  audit_log: AgentRuntime::AuditLog.new
 )
 
-# 6. Run agent
 result = agent.step(input: "Fetch market data for AAPL")
+puts result.inspect
 ```
 
-### How It Works
+### Multi-step loop (`Agent#run`)
+Use this when the agent should iterate until it emits `finish` or a tool marks
+`done: true`. This loop uses `/generate` only (no chat).
 
-1. **Planner** receives input and current state, calls LLM to generate a decision
-2. **Policy** validates the decision (confidence, allowed actions)
-3. **Executor** runs the appropriate tool
-4. **State** is updated with the result
-5. **AuditLog** records everything (if enabled)
+```ruby
+result = agent.run(initial_input: "Find best PDF library for Ruby")
+```
 
-### Key Principles
+### Formal FSM workflow (`AgentFSM`)
+`AgentFSM` is the explicit FSM driver. It uses `/generate` for PLAN and
+`/chat` for EXECUTE. Tool execution happens only in OBSERVE.
 
-#### Stateless Planning
-The planner never mutates state. It's a pure function that takes input and state, returns a decision.
+Tool calling in EXECUTE requires Ollama tool definitions. This gem does not
+auto-convert `ToolRegistry` entries to `Ollama::Tool` objects. If you need tool
+calling, subclass `AgentFSM` and return tool definitions from
+`build_tools_for_chat`.
 
-#### Policy Enforcement
-LLM cannot override policy. Policy failures stop execution immediately.
+```ruby
+class MyAgentFSM < AgentRuntime::AgentFSM
+  def build_tools_for_chat
+    # Return Ollama::Tool definitions here
+    []
+  end
+end
 
-#### Explicit State
-No hidden memory. State is always visible, serializable, and testable.
+agent_fsm = MyAgentFSM.new(
+  planner: planner,
+  policy: AgentRuntime::Policy.new,
+  executor: AgentRuntime::Executor.new(tool_registry: tools),
+  state: AgentRuntime::State.new,
+  tool_registry: tools,
+  audit_log: AgentRuntime::AuditLog.new
+)
 
-#### Tool Isolation
-Tools are deterministic, testable, and side-effecting (intentionally).
+result = agent_fsm.run(initial_input: "Research Ruby memory management")
+```
+
+## Tool safety model
+- Tools are Ruby callables registered in `ToolRegistry`.
+- LLM output never executes tools directly.
+- Tool execution happens only in `Executor`.
+- Tool results are recorded in state and (for FSM) injected as `role: "tool"`.
 
 ## Examples
 
-See the `examples/` directory for complete implementations:
+### Quick Start
+**Start here**: `examples/complete_working_example.rb` - A complete, runnable example demonstrating all features.
 
-* **Trading Agent** - Market data and trade execution
-* **Patch Agent** - Code refactoring and patching
-* **Infra Agent** - Infrastructure automation
+```bash
+# Make sure Ollama is running: ollama serve
+ruby examples/complete_working_example.rb
+```
 
-## What AgentRuntime Is NOT
+### Available Examples
+- `examples/complete_working_example.rb` ⭐ - **Complete working example** (recommended starting point)
+- `examples/fixed_console_example.rb` - Minimal example for console use
+- `examples/console_example.rb` - Basic console example
+- `examples/rails_example/` - Rails integration example
+- `examples/dhanhq_example.rb` - Domain-specific example (requires DhanHQ gem)
 
-This framework intentionally avoids:
+See `examples/README.md` for detailed documentation on all examples.
 
-❌ Domain logic
-❌ Broker APIs
-❌ Git logic
-❌ HTTP clients
-❌ Storage decisions
-❌ Hardcoded prompts
+Examples are not part of the public API.
 
-The framework only defines **HOW agents run**, not **WHAT they do**.
-
-## Why This Is Reusable
-
-| Property           | AgentRuntime | Typical Agent Framework |
-| ------------------ | ------------ | ----------------------- |
-| Stateless planning | ✅            | ❌                       |
-| Explicit state     | ✅            | ❌                       |
-| Policy gate        | ✅            | ❌                       |
-| Tool isolation     | ✅            | ❌                       |
-| Deterministic      | ✅            | ❌                       |
-| Auditable          | ✅            | ❌                       |
+## Documentation
+- `AGENTIC_WORKFLOWS.md`
+- `FSM_WORKFLOWS.md`
+- `SCHEMA_GUIDE.md`
+- `PREREQUISITES.md`
 
 ## Development
-
 After checking out the repo, run:
 
 ```bash
@@ -171,7 +209,17 @@ To run tests:
 
 ```bash
 rake spec
+# or
+bundle exec rspec
 ```
+
+Test coverage reports are generated automatically. View the HTML report:
+```bash
+open coverage/index.html  # macOS
+xdg-open coverage/index.html  # Linux
+```
+
+See `TESTING.md` for detailed testing and coverage information.
 
 To run the console:
 
@@ -180,15 +228,7 @@ bin/console
 ```
 
 ## Contributing
-
-Bug reports and pull requests are welcome. This project follows Clean Ruby principles:
-
-* Code must be readable, straightforward, and easy to change
-* Optimize for human understanding over cleverness
-* Prefer simple solutions (K.I.S.S) over complex abstractions
-* Methods must do one thing only
-* Classes must have a single, clear responsibility
+Bug reports and pull requests are welcome. Keep the API strict and small.
 
 ## License
-
-The gem is available as open source under the terms of the [MIT License](LICENSE.txt).
+The gem is available as open source under the terms of the MIT License.

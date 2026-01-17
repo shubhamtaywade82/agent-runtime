@@ -35,7 +35,9 @@ class BillingAnalysisJob < ApplicationJob
   private
 
   def build_agent_with_state(state)
-    client = OllamaClient::Client.new(url: ENV.fetch("OLLAMA_URL", "http://localhost:11434"))
+    config = Ollama::Config.new
+    config.base_url = ENV.fetch("OLLAMA_URL", "http://localhost:11434")
+    client = Ollama::Client.new(config: config)
 
     planner = AgentRuntime::Planner.new(
       client: client,

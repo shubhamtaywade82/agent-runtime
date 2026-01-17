@@ -7,5 +7,15 @@ require "agent_runtime"
 # You can add fixtures and/or initialization code here to make experimenting
 # with your gem easier. You can also use a different console, if you like.
 
+# Print helpful info
+puts "\n#{"=" * 60}"
+puts "agent_runtime Console"
+puts "=" * 60
+puts "\nQuick start:"
+puts "  Load an example:"
+puts "    load 'examples/fixed_console_example.rb'"
+puts "\nSee README.md for usage examples"
+puts "#{"=" * 60}\n\n"
+
 require "irb"
 IRB.start(__FILE__)
