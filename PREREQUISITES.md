@@ -158,6 +158,8 @@ ollama pull llama3.1:8b
 ollama pull qwen2.5:14b
 ```
 
+For a multi-model allocation map (reason, validate, explain), see `OLLAMA_MODEL_ALLOCATION.md`.
+
 ### Error Handling
 
 The `ollama-client` gem provides comprehensive error handling. When using `agent_runtime`, wrap agent calls in error handling:

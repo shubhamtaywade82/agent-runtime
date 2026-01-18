@@ -34,7 +34,7 @@ module AgentRuntime
 
   class Planner
     def initialize: (untyped client, ?Hash[untyped, untyped] schema, ?Proc prompt_builder) -> void
-    def plan: (String input:, Hash[untyped, untyped] state:) -> Decision
+    def plan: (String input:, Hash[untyped, untyped] state:, **untyped) -> Decision
     def chat: (Array[Hash[untyped, untyped]] messages:, ?untyped tools, **untyped) -> Hash[untyped, untyped]
     def chat_raw: (Array[Hash[untyped, untyped]] messages:, ?untyped tools, **untyped) -> Hash[untyped, untyped]
   end

@@ -195,6 +195,7 @@ Examples are not part of the public API.
 ## Documentation
 - `AGENTIC_WORKFLOWS.md`
 - `FSM_WORKFLOWS.md`
+- `OLLAMA_MODEL_ALLOCATION.md`
 - `SCHEMA_GUIDE.md`
 - `PREREQUISITES.md`
 
