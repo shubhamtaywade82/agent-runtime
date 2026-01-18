@@ -37,16 +37,17 @@ module AgentRuntime
     # @param input [String] The input prompt for planning
     # @param state [Hash] The current state snapshot
     # @return [Decision] A structured decision with action, params, and optional confidence
+    # @note Additional keyword arguments are passed through to the client.
     # @raise [ExecutionError] If schema or prompt_builder are not configured
     #
     # @example
     #   decision = planner.plan(input: "What should I do next?", state: { step: 1 })
     #   # => #<AgentRuntime::Decision action="search", params={query: "..."}, confidence=0.9>
-    def plan(input:, state:)
+    def plan(input:, state:, **options)
       raise ExecutionError, "Planner requires schema and prompt_builder for plan" unless @schema && @prompt_builder
 
       prompt = @prompt_builder.call(input: input, state: state)
-      raw = @client.generate(prompt: prompt, schema: @schema)
+      raw = @client.generate(prompt: prompt, schema: @schema, **options)
 
       Decision.new(**raw.transform_keys(&:to_sym))
     end
