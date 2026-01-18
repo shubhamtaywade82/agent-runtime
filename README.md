@@ -193,10 +193,17 @@ See `examples/README.md` for detailed documentation on all examples.
 Examples are not part of the public API.
 
 ## Documentation
-- `AGENTIC_WORKFLOWS.md`
-- `FSM_WORKFLOWS.md`
-- `SCHEMA_GUIDE.md`
-- `PREREQUISITES.md`
+
+📚 **Comprehensive documentation** is available in the [`docs/`](docs/) directory.
+
+### Quick Links
+- **[Agentic Workflows](docs/AGENTIC_WORKFLOWS.md)** - Understanding workflow patterns
+- **[FSM Workflows](docs/FSM_WORKFLOWS.md)** - Finite State Machine guide
+- **[Schema Guide](docs/SCHEMA_GUIDE.md)** - JSON Schema reference
+- **[Prerequisites](docs/PREREQUISITES.md)** - Setup requirements
+- **[Testing Guide](docs/TESTING.md)** - Testing and coverage
+
+See [`docs/README.md`](docs/README.md) for complete documentation index.
 
 ## Development
 After checking out the repo, run:
