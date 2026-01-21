@@ -288,6 +288,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
                                                               .and_return(->(_input:, _state:) { "Prompt" })
+        allow(audit_log).to receive(:record)
 
         # Run once
         agent_fsm.run(initial_input: "first")
@@ -317,6 +318,7 @@ RSpec.describe AgentRuntime::AgentFSM do
         allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
         allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
                                                               .and_return(->(_input:, _state:) { "Prompt" })
+        allow(audit_log).to receive(:record)
 
         agent_fsm.run(initial_input: "first")
         agent_fsm.messages.length

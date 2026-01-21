@@ -8,6 +8,7 @@ Essential guides for using the gem:
 
 - **[AGENTIC_WORKFLOWS.md](AGENTIC_WORKFLOWS.md)** - Understanding agentic workflow patterns
 - **[FSM_WORKFLOWS.md](FSM_WORKFLOWS.md)** - Finite State Machine workflow guide
+- **[MULTI_MODEL_STRATEGY.md](MULTI_MODEL_STRATEGY.md)** - ⭐ **NEW** - Using different models for different states
 - **[SCHEMA_GUIDE.md](SCHEMA_GUIDE.md)** - JSON Schema guide for decisions
 - **[PREREQUISITES.md](PREREQUISITES.md)** - Setup requirements (Ollama, dependencies)
 - **[TESTING.md](TESTING.md)** - Testing guide and best practices

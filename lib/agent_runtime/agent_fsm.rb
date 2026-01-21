@@ -84,6 +84,10 @@ module AgentRuntime
         case @fsm.state_name
         when :INTAKE
           handle_intake(initial_input)
+        when :FINALIZE
+          return handle_finalize
+        when :HALT
+          return handle_halt
         when :PLAN
           handle_plan
         when :DECIDE
@@ -94,13 +98,14 @@ module AgentRuntime
           handle_observe
         when :LOOP_CHECK
           handle_loop_check
-        when :FINALIZE
-          return handle_finalize
-        when :HALT
-          return handle_halt
+        else
+          raise "Unknown FSM state: #{@fsm.state_name}"
         end
 
-        break if @fsm.terminal?
+        # Check for infinite loops
+        if @fsm.iteration_count > 100
+          raise "Max iterations exceeded"
+        end
       end
     end
 

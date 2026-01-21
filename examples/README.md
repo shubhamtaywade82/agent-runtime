@@ -41,6 +41,35 @@ This example demonstrates:
 ruby examples/complete_working_example.rb
 ```
 
+### `multi_model_strategy.rb` ⭐ **ADVANCED PATTERN**
+**Production-grade multi-model workflow** - Different models for different cognitive states.
+
+**What it shows:**
+- Using llama3.1:8b for reasoning (PLAN state)
+- Using qwen2.5:7b for validation (DECIDE state)
+- Using llama3.1:4b for explanations (FINALIZE state)
+- Custom FSM state handlers
+- State-specific planners
+- Model specialization strategy
+
+**Run it:**
+```bash
+# Uses models available in your Ollama server:
+# - llama3.1:8b (reasoning)
+# - mistral:7b-instruct (validation)
+# - llama3.2:3b (explanation)
+
+ruby examples/multi_model_strategy.rb
+
+# Or use custom models:
+REASONING_MODEL=llama3.1:8b \
+VALIDATION_MODEL=qwen2.5-coder:7b \
+EXPLANATION_MODEL=llama3.2:3b \
+ruby examples/multi_model_strategy.rb
+```
+
+**See also:** `docs/MULTI_MODEL_STRATEGY.md` for comprehensive guide
+
 ### `fixed_console_example.rb`
 Minimal example for use in `bin/console`. Copy-paste ready.
 
