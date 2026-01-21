@@ -10,6 +10,10 @@ RSpec.describe AgentRuntime::Agent do
   let(:state) { AgentRuntime::State.new }
   let(:audit_log) { instance_double(AgentRuntime::AuditLog) }
 
+  before do
+    allow(mock_policy).to receive(:converged?).and_return(false)
+  end
+
   let(:agent) do
     described_class.new(
       planner: mock_planner,
@@ -168,6 +172,7 @@ RSpec.describe AgentRuntime::Agent do
       decision = AgentRuntime::Decision.new(action: "fetch", params: {})
       allow(mock_planner).to receive(:plan).and_return(decision)
       allow(mock_policy).to receive(:validate!)
+      allow(mock_policy).to receive(:converged?).and_return(false)
       allow(mock_executor).to receive(:execute).and_return({ done: true })
       allow(audit_log).to receive(:record)
       allow(state).to receive(:snapshot).and_return({})
@@ -182,6 +187,7 @@ RSpec.describe AgentRuntime::Agent do
       decision = AgentRuntime::Decision.new(action: "fetch", params: {})
       allow(mock_planner).to receive(:plan).and_return(decision)
       allow(mock_policy).to receive(:validate!)
+      allow(mock_policy).to receive(:converged?).and_return(false)
       allow(mock_executor).to receive(:execute).and_return({})
       allow(audit_log).to receive(:record)
       allow(state).to receive(:snapshot).and_return({})
@@ -197,6 +203,7 @@ RSpec.describe AgentRuntime::Agent do
 
       allow(mock_planner).to receive(:plan).and_return(finish_decision)
       allow(mock_policy).to receive(:validate!)
+      allow(mock_policy).to receive(:converged?).and_return(false)
       allow(mock_executor).to receive(:execute).and_return({ done: true })
       allow(audit_log).to receive(:record)
       allow(state).to receive(:snapshot).and_return({})
@@ -216,6 +223,7 @@ RSpec.describe AgentRuntime::Agent do
       allow(mock_policy).to receive(:validate!)
       allow(mock_executor).to receive(:execute)
         .and_return({ step: 1 }, { step: 2 }, { done: true })
+      allow(mock_policy).to receive(:converged?).and_return(false)
       allow(audit_log).to receive(:record)
       allow(state).to receive(:snapshot).and_return({})
       allow(state).to receive(:apply!)
@@ -265,6 +273,7 @@ RSpec.describe AgentRuntime::Agent do
       decision = AgentRuntime::Decision.new(action: "continue", params: {})
       allow(mock_planner).to receive(:plan).and_return(decision)
       allow(mock_policy).to receive(:validate!)
+      allow(mock_policy).to receive(:converged?).and_return(false)
       allow(mock_executor).to receive(:execute).and_return({})
       allow(audit_log).to receive(:record)
       allow(state).to receive(:snapshot).and_return({})

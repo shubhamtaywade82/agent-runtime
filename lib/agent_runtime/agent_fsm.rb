@@ -302,7 +302,7 @@ module AgentRuntime
 
     # S5: LOOP_CHECK - Control continuation.
     #
-    # Checks guards for continuation: max iterations, policy violations, etc.
+    # Checks guards for continuation: max iterations, convergence, etc.
     # Uses a simple heuristic: if observations exist, continue to EXECUTE.
     # Otherwise, finalize.
     #
@@ -311,6 +311,12 @@ module AgentRuntime
       # Check guards: max iterations, policy violations, etc.
       if @fsm.iteration_count >= @fsm.instance_variable_get(:@max_iterations)
         @fsm.transition_to(FSM::STATES[:HALT], reason: "Max iterations exceeded")
+        return
+      end
+
+      # Check convergence policy
+      if @policy.converged?(@state)
+        @fsm.transition_to(FSM::STATES[:FINALIZE], reason: "Policy indicates convergence")
         return
       end
 

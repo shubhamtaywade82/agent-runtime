@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "state"
+
 module AgentRuntime
   # Executes tool calls via ToolRegistry based on agent decisions.
   #
@@ -23,8 +25,11 @@ module AgentRuntime
     # If the action is "finish", returns a done hash without executing any tool.
     # Otherwise, normalizes parameters and calls the tool from the registry.
     #
+    # When a tool is executed, this method automatically marks progress signals
+    # in the state's progress tracker (if state is a State instance).
+    #
     # @param decision [Decision] The decision to execute
-    # @param state [State, Hash, nil] The current state (unused in default implementation)
+    # @param state [State, Hash, nil] The current state (used for progress tracking if State instance)
     # @return [Hash] The execution result hash
     # @raise [ExecutionError] If execution fails or tool is not found
     #
@@ -32,18 +37,27 @@ module AgentRuntime
     #   decision = Decision.new(action: "search", params: { query: "weather" })
     #   result = executor.execute(decision, state: state)
     #   # => { result: "Sunny, 72°F" }
+    #   # Also marks :tool_called in state.progress
     #
     # @example Finish action
     #   decision = Decision.new(action: "finish")
     #   result = executor.execute(decision, state: state)
     #   # => { done: true }
-    def execute(decision, state: nil) # rubocop:disable Lint/UnusedMethodArgument
+    def execute(decision, state: nil)
       case decision.action
       when "finish"
         { done: true }
       else
         normalized_params = normalize_params(decision.params || {})
-        @tools.call(decision.action, normalized_params)
+        result = @tools.call(decision.action, normalized_params)
+
+        # Emit generic progress signal when tool is executed
+        if state.is_a?(State)
+          state.progress.mark!(:tool_called)
+          state.progress.mark!(:step_completed)
+        end
+
+        result
       end
     rescue StandardError => e
       raise ExecutionError, e.message

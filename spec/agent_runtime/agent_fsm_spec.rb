@@ -12,6 +12,10 @@ RSpec.describe AgentRuntime::AgentFSM do
   let(:tool_registry) { AgentRuntime::ToolRegistry.new({}) }
   let(:audit_log) { instance_double(AgentRuntime::AuditLog) }
 
+  before do
+    allow(mock_policy).to receive(:converged?).and_return(false)
+  end
+
   let(:agent_fsm) do
     described_class.new(
       planner: mock_planner,
@@ -326,6 +330,52 @@ RSpec.describe AgentRuntime::AgentFSM do
         agent_fsm.run(initial_input: "second")
         # Should start fresh, so should have same number of messages (1 user message + responses)
         expect(agent_fsm.messages.length).to be >= 1
+      end
+
+      it "halts when policy indicates convergence" do
+        convergent_policy = Class.new(AgentRuntime::Policy) do
+          def converged?(state)
+            state.progress.include?(:work_complete)
+          end
+        end.new
+
+        plan_decision = AgentRuntime::Decision.new(
+          action: "plan",
+          params: { goal: "test", required_capabilities: [], initial_steps: [] }
+        )
+
+        chat_response = {
+          "message" => {
+            "content" => "Done",
+            "tool_calls" => nil
+          }
+        }
+
+        allow(mock_planner).to receive_messages(plan: plan_decision, chat_raw: chat_response)
+        allow(mock_planner).to receive(:instance_variable_get).with(:@schema).and_return({})
+        allow(mock_planner).to receive(:instance_variable_get).with(:@prompt_builder)
+                                                              .and_return(->(_input:, _state:) { "Prompt" })
+        allow(audit_log).to receive(:record)
+
+        agent_fsm = described_class.new(
+          planner: mock_planner,
+          policy: convergent_policy,
+          executor: mock_executor,
+          state: state,
+          tool_registry: tool_registry,
+          audit_log: audit_log,
+          max_iterations: 10
+        )
+
+        # Mark convergence signal
+        state.progress.mark!(:work_complete)
+
+        result = agent_fsm.run(initial_input: "Test")
+
+        # Should have transitioned to FINALIZE due to convergence
+        expect(agent_fsm.fsm.terminal?).to be true
+        expect(result).to be_a(Hash)
+        expect(result[:done]).to be true
       end
     end
   end

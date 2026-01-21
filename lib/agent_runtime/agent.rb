@@ -72,6 +72,7 @@ module AgentRuntime
     # The loop continues until:
     # - The decision action is "finish"
     # - The result contains `done: true`
+    # - The policy indicates convergence (via converged? hook)
     # - Maximum iterations are exceeded
     #
     # @param initial_input [String] The initial input to start the workflow
@@ -120,6 +121,7 @@ module AgentRuntime
         final_result = result
 
         break if terminated?(decision, result)
+        break if @policy.converged?(@state)
 
         current_input = input_builder ? input_builder.call(result, iteration) : build_next_input(result, iteration)
       end

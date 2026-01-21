@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
+require_relative "progress_tracker"
+
 module AgentRuntime
   # Explicit, serializable state management with deep merge support.
   #
   # This class manages the agent's state throughout execution. State is stored
   # as a hash and can be snapshotted for read-only access. Updates are applied
   # using deep merge to preserve nested structures.
+  #
+  # The state includes a ProgressTracker for generic signal tracking. Applications
+  # can mark progress signals and use them in convergence policies.
   #
   # @example Initialize with initial data
   #   state = State.new({ step: 1, context: { user: "Alice" } })
@@ -18,18 +23,34 @@ module AgentRuntime
   #   state.apply!({ step: 2, context: { task: "search" } })
   #   state.snapshot
   #   # => { step: 2, context: { user: "Alice", task: "search" } }
+  #
+  # @example Track progress
+  #   state.progress.mark!(:tool_called)
+  #   state.progress.include?(:tool_called)  # => true
   class State
     # Initialize a new State instance.
     #
     # @param data [Hash] Initial state data (default: {})
     def initialize(data = {})
       @data = data
+      @progress = ProgressTracker.new
     end
+
+    # Get the progress tracker for this state.
+    #
+    # @return [ProgressTracker] The progress tracker instance
+    #
+    # @example
+    #   state.progress.mark!(:signal)
+    attr_reader :progress
 
     # Create a snapshot of the current state.
     #
     # Returns a shallow copy of the state data. Modifications to the snapshot
     # will not affect the original state.
+    #
+    # Note: The progress tracker is not included in the snapshot. Access it
+    # directly via #progress.
     #
     # @return [Hash] A copy of the current state data
     #

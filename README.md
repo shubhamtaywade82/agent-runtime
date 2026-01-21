@@ -21,7 +21,7 @@ tool execution, and explicit state. It does not ship domain logic.
 - Tool results are injected as `role: "tool"` messages only after execution.
 - Only `EXECUTE` loops. All other states are single-shot.
 - Termination happens only on explicit signals:
-  `decision.action == "finish"`, `result[:done] == true`, or `MaxIterationsExceeded`.
+  `decision.action == "finish"`, `result[:done] == true`, `policy.converged?(state)`, or `MaxIterationsExceeded`.
 - This gem does not add retries or streaming. Retry/streaming policy lives in
   `ollama-client`.
 
@@ -50,6 +50,7 @@ This overview is informative only. The strict rules above are the contract.
 - `Agent`: simple decision loop using `Planner#plan` and tools.
 - `AgentFSM`: formal FSM with explicit states and transition history.
 - `AuditLog`: optional logging of decisions and results.
+- `ProgressTracker`: generic signal tracking for convergence detection.
 
 ## API mapping
 | Concern | Method | LLM endpoint | Where it belongs |
@@ -170,6 +171,63 @@ result = agent_fsm.run(initial_input: "Research Ruby memory management")
 - LLM output never executes tools directly.
 - Tool execution happens only in `Executor`.
 - Tool results are recorded in state and (for FSM) injected as `role: "tool"`.
+
+## Progress tracking and convergence
+
+AgentRuntime provides generic progress tracking and convergence detection to prevent infinite loops.
+
+### Progress tracking
+
+The `State` includes a `ProgressTracker` that tracks opaque signals. The runtime does not interpret these signals; they are domain-agnostic markers.
+
+```ruby
+state = AgentRuntime::State.new
+state.progress.mark!(:tool_called)
+state.progress.mark!(:step_completed)
+state.progress.include?(:tool_called)  # => true
+```
+
+The `Executor` automatically marks `:tool_called` and `:step_completed` when tools are executed.
+
+### Convergence policy
+
+By default, agents never converge (safe default). Applications must define convergence logic by overriding `Policy#converged?`:
+
+```ruby
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when required signals are present
+    state.progress.include?(:primary_task_done, :validation_complete)
+  end
+end
+
+policy = ConvergentPolicy.new
+agent = AgentRuntime::Agent.new(
+  planner: planner,
+  policy: policy,  # Use convergent policy
+  executor: executor,
+  state: state
+)
+
+# Agent will halt when policy.converged?(state) returns true
+result = agent.run(initial_input: "Complete task")
+```
+
+**Important**: Convergence is enforced by policy, not prompts. The runtime does not interpret tool semantics or LLM output to determine completion. Applications define what "done" means through progress signals and convergence logic.
+
+### Why convergence matters
+
+Without convergence detection, agents can loop indefinitely:
+- Tool calls succeed forever
+- Executor keeps reasoning
+- Max steps are exceeded
+- No real work is finalized
+
+With convergence:
+- Applications track progress via signals
+- Policy determines when work is complete
+- Runtime halts deterministically
+- No reliance on LLM deciding "I'm done"
 
 ## Examples
 
