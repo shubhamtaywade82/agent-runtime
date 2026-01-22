@@ -9,7 +9,8 @@ class BillingAnalysisJob < ApplicationJob
   # @param user_id [Integer] User requesting the analysis
   # @param question [String] User's billing question
   # @param session_id [String] Optional session identifier for state persistence
-  def perform(user_id:, question:, session_id: nil)
+  # @param multi_step [Boolean] Use multi-step workflow (agent.run) vs single-step (agent.step)
+  def perform(user_id:, question:, session_id: nil, multi_step: false)
     user = User.find(user_id)
 
     # Load or create agent state for this session
@@ -18,10 +19,22 @@ class BillingAnalysisJob < ApplicationJob
     # Create agent with persisted state
     agent = build_agent_with_state(state)
 
-    result = agent.step(input: question)
+    # Single-step: one decision, one execution (faster, simpler)
+    # Multi-step: loop until convergence or max iterations (for complex workflows)
+    result = if multi_step
+               agent.run(initial_input: question)
+             else
+               agent.step(input: question)
+             end
 
-    # Persist updated state
+    # Persist updated state (including progress signals)
     save_agent_state(session_id || user.id, agent.instance_variable_get(:@state))
+
+    # Log convergence status for monitoring
+    if state.respond_to?(:progress)
+      Rails.logger.info("BillingAnalysisJob progress: #{state.progress.signals.inspect}")
+      Rails.logger.info("BillingAnalysisJob converged: #{agent.policy.converged?(state)}")
+    end
 
     # Notify user (via ActionCable, email, etc.)
     notify_user(user, result)

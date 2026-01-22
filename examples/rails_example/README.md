@@ -36,23 +36,26 @@ Start with `INTEGRATION_GUIDE.md` for comprehensive patterns and best practices.
 
 See `app/models/billing_agent.rb` for a complete agent implementation:
 - ✅ Correct JSON Schema format
-- ✅ Domain-specific policy (BillingPolicy)
+- ✅ Domain-specific policy (BillingPolicy) with convergence logic
 - ✅ Domain-specific executor with tools
 - ✅ Singleton pattern for reuse
+- ✅ Convergence policy to prevent infinite loops
 
 ### 3. Understand Controller Integration
 
 See `app/controllers/assistants_controller.rb` for:
-- ✅ Synchronous agent execution
+- ✅ Synchronous agent execution (single-step and multi-step)
 - ✅ Error handling (PolicyViolation, ExecutionError)
 - ✅ JSON response formatting
+- ✅ Progress signal tracking and convergence status
 
 ### 4. Learn Background Job Pattern
 
 See `app/jobs/billing_analysis_job.rb` for:
-- ✅ Async agent execution
+- ✅ Async agent execution (single-step and multi-step)
 - ✅ State persistence (Redis/cache)
 - ✅ Result notification
+- ✅ Convergence logging for monitoring
 
 ## Usage Examples
 
@@ -102,6 +105,32 @@ result = agent.step(input: params[:question])
 save_agent_state(session.id, agent.state)
 ```
 
+### Single-Step vs Multi-Step Execution
+
+```ruby
+# Single-step: one decision, one execution (faster, simpler)
+result = agent.step(input: "Analyze invoice #123")
+
+# Multi-step: loop until convergence or max iterations (for complex workflows)
+result = agent.run(initial_input: "Fetch invoice #123 and analyze it")
+
+# Check convergence status
+if agent.state.respond_to?(:progress)
+  puts "Progress signals: #{agent.state.progress.signals.inspect}"
+  puts "Converged: #{agent.policy.converged?(agent.state)}"
+end
+```
+
+## Convergence & Progress Tracking
+
+The `BillingPolicy` includes a `converged?` method that prevents infinite loops by defining when the agent has achieved its goal. The runtime automatically tracks progress signals when tools are executed.
+
+**Key Points:**
+- ✅ Progress signals are automatically marked when tools execute (`:tool_called`, `:step_completed`)
+- ✅ Convergence policy is checked after each step in multi-step workflows (`agent.run()`)
+- ✅ Agent halts when `policy.converged?(state)` returns `true` or max iterations are reached
+- ✅ Backward compatible: works with or without progress tracking
+
 ## Key Components
 
 ### BillingAgent (Domain-Specific Agent)
@@ -136,6 +165,18 @@ class BillingPolicy < AgentRuntime::Policy
     unless allowed_actions.include?(decision.action)
       raise AgentRuntime::PolicyViolation, "Action not allowed"
     end
+  end
+
+  # Convergence policy: prevent infinite loops
+  def converged?(state)
+    return false unless state.respond_to?(:progress)
+
+    # Converge when we have required data or tool was called
+    snapshot = state.snapshot
+    has_analysis = snapshot[:analysis].present?
+    has_invoice = snapshot[:invoice].present?
+
+    (has_analysis || has_invoice) || state.progress.include?(:tool_called)
   end
 end
 ```
