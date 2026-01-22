@@ -125,6 +125,7 @@ puts "Agent state after step:"
 puts state.snapshot.inspect
 if state.respond_to?(:progress)
   puts "\nProgress signals: #{state.progress.signals.inspect}"
-  puts "   (Convergence policy will halt agent when :tool_called signal is present)"
+  puts "   (Note: Using agent.step() for single-step execution)"
+  puts "   (If using agent.run(), convergence policy will halt when :tool_called is present)"
 end
 puts "=" * 60

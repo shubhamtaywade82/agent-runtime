@@ -71,6 +71,9 @@ planner = AgentRuntime::Planner.new(
 class ConvergentPolicy < AgentRuntime::Policy
   def converged?(state)
     # Converge when a tool has been called
+    # Check if progress tracking is available (backward compatibility)
+    return false unless state.respond_to?(:progress)
+
     state.progress.include?(:tool_called)
   end
 end
@@ -91,7 +94,7 @@ agent = AgentRuntime::Agent.new(
 
 # 7. Run single step
 begin
-  result = agent.step(input: "Fetch market data for AAPL")
+  result = agent.step(input: "Fetch market data for NIFTY")
   puts "✅ Success!"
   puts "Result: #{result.inspect}"
 rescue Ollama::RetryExhaustedError => e
@@ -106,4 +109,8 @@ rescue StandardError => e
   puts e.backtrace.first(5)
 end
 
-puts "\nProgress signals: #{state.progress.signals.inspect}"
+if state.respond_to?(:progress)
+  puts "\nProgress signals: #{state.progress.signals.inspect}"
+  puts "   (Note: Using agent.step() for single-step execution)"
+  puts "   (If using agent.run(), convergence policy will halt when :tool_called is present)"
+end
