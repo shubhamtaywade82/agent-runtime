@@ -6,18 +6,53 @@
 
 require "agent_runtime"
 require "ollama_client"
-require "dhan_hq"
+
+# Try to require dhan_hq gem (may fail if dependencies missing)
+begin
+  require "dhan_hq"
+rescue LoadError => e
+  puts "❌ DhanHQ gem or dependencies not available"
+  puts "   Error: #{e.message}"
+  puts ""
+  puts "   To use this example, install:"
+  puts "   - gem install dhan_hq"
+  puts "   - gem install technical-analysis (or ruby-technical-analysis)"
+  puts ""
+  puts "   Or add to Gemfile:"
+  puts '   gem "DhanHQ", git: "https://github.com/shubhamtaywade82/dhanhq-client.git"'
+  puts '   gem "technical-analysis"'
+  exit 1
+end
 
 # Load DhanHQ tools from ollama-client examples
 # Set DHANHQ_TOOLS_PATH environment variable to point to dhanhq_tools.rb
 tools_path = ENV.fetch("DHANHQ_TOOLS_PATH", nil)
+
+# Try common default locations if not set
+if tools_path.nil? || !File.exist?(tools_path)
+  default_paths = [
+    "/home/nemesis/project/ollama-client/examples/dhanhq_tools.rb",
+    "../ollama-client/examples/dhanhq_tools.rb",
+    "../../ollama-client/examples/dhanhq_tools.rb",
+    File.expand_path("~/project/ollama-client/examples/dhanhq_tools.rb"),
+    File.expand_path("~/ollama-client/examples/dhanhq_tools.rb")
+  ]
+
+  tools_path = default_paths.find { |path| File.exist?(path) }
+end
+
 unless tools_path && File.exist?(tools_path)
   puts "❌ DhanHQ tools not found"
   puts "   Set DHANHQ_TOOLS_PATH environment variable to point to dhanhq_tools.rb"
   puts "   Example: export DHANHQ_TOOLS_PATH=/path/to/ollama-client/examples/dhanhq_tools.rb"
+  puts ""
+  puts "   Or place dhanhq_tools.rb in a standard location:"
+  puts "   - /home/nemesis/project/ollama-client/examples/dhanhq_tools.rb"
+  puts "   - ../ollama-client/examples/dhanhq_tools.rb (relative to this file)"
   exit 1
 end
 
+puts "✅ Loading DhanHQ tools from: #{tools_path}"
 require tools_path
 
 # Configure DhanHQ
@@ -179,10 +214,25 @@ planner = AgentRuntime::Planner.new(
 )
 
 # 4. Create convergence policy (prevents infinite loops)
+# For multi-step workflows, converge when we have the final result
 class ConvergentPolicy < AgentRuntime::Policy
   def converged?(state)
-    # Converge when a tool has been called
-    state.progress.include?(:tool_called)
+    # Check if progress tracking is available (backward compatibility)
+    return false unless state.respond_to?(:progress)
+
+    snapshot = state.snapshot
+
+    # Converge when we have actual market data (LTP, quote, etc.)
+    # This allows multi-step workflows: find_instrument -> get_live_ltp/get_market_quote
+    has_market_data = snapshot[:ltp] ||
+                      snapshot[:last_traded_price] ||
+                      snapshot[:quote] ||
+                      snapshot[:market_quote] ||
+                      (snapshot[:result] && (snapshot[:result][:ltp] || snapshot[:result][:quote]))
+
+    # Also converge if we've called multiple tools (likely completed workflow)
+    tool_call_count = state.progress.signals.count { |s| s == :tool_called }
+    has_market_data || tool_call_count >= 2
   end
 end
 
@@ -213,11 +263,35 @@ test_cases.each do |test_input|
   puts "Test: #{test_input}"
   puts "-" * 60
 
+  # Create a fresh state for each test to avoid state pollution
+  test_state = AgentRuntime::State.new
+  test_agent = AgentRuntime::Agent.new(
+    planner: planner,
+    executor: AgentRuntime::Executor.new(tool_registry: tools),
+    policy: ConvergentPolicy.new,
+    state: test_state,
+    audit_log: AgentRuntime::AuditLog.new,
+    max_iterations: 10 # Allow multiple steps to complete the workflow
+  )
+
   begin
-    result = agent.step(input: test_input)
+    # Use agent.run() to allow multi-step execution until convergence
+    # This enables workflows like: find_instrument -> get_live_ltp
+    result = test_agent.run(initial_input: test_input)
+
     puts "\n✅ Success!"
     puts "Result: #{result.inspect}"
-    puts "Progress signals: #{agent_state.progress.signals.inspect}"
+    puts "Iterations: #{result[:iterations] || "N/A"}"
+    if test_state.respond_to?(:progress)
+      puts "Progress signals: #{test_state.progress.signals.inspect}"
+      tool_count = test_state.progress.signals.count { |s| s == :tool_called }
+      puts "   (Agent executed #{tool_count} tool(s) to complete the task)"
+    end
+    puts "Final state keys: #{test_state.snapshot.keys.join(", ")}"
+  rescue AgentRuntime::MaxIterationsExceeded => e
+    puts "\n⚠️  Max iterations exceeded: #{e.message}"
+    puts "   (Agent may need more steps or different prompt to complete task)"
+    puts "Progress signals: #{test_state.progress.signals.inspect}" if test_state.respond_to?(:progress)
   rescue Ollama::RetryExhaustedError => e
     puts "\n❌ Ollama server error: #{e.message}"
     puts "Make sure Ollama server is running: ollama serve"
