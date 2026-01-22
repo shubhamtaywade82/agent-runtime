@@ -112,6 +112,21 @@ class BillingPolicy < AgentRuntime::Policy
 
     raise AgentRuntime::PolicyViolation, "fetch_invoice requires invoice_id"
   end
+
+  # Convergence policy: halt when billing analysis is complete
+  # This prevents infinite loops by defining when the agent has achieved its goal
+  def converged?(state)
+    # Check if progress tracking is available (backward compatibility)
+    return false unless state.respond_to?(:progress)
+
+    # Converge when we have both analysis and invoice data, or when finish action was called
+    snapshot = state.snapshot
+    has_analysis = snapshot[:analysis].present?
+    has_invoice = snapshot[:invoice].present?
+
+    # Converge if we have the required data, or if a tool has been called (single-step completion)
+    (has_analysis || has_invoice) || state.progress.include?(:tool_called)
+  end
 end
 
 # Domain-specific executor with billing tools
