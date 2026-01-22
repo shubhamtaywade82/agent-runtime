@@ -353,6 +353,8 @@ class MultiModelAgentFSM < AgentRuntime::AgentFSM
   def handle_execute
     puts "   🔧 EXECUTE: Signal validated, transitioning to finalize..."
     # Skip actual tool execution - we're just demonstrating the multi-model flow
+    # Mark progress signal to track workflow completion
+    @state.progress.mark!(:workflow_complete) if @state.respond_to?(:progress)
     # Transition to FINALIZE and immediately process it
     @fsm.transition_to(AgentRuntime::FSM::STATES[:FINALIZE], reason: "Demo complete")
     # Return the result from handle_finalize directly
@@ -426,8 +428,15 @@ end
 # Create convergence policy (prevents infinite loops)
 class ConvergentPolicy < AgentRuntime::Policy
   def converged?(state)
-    # Converge when a tool has been called
-    state.progress.include?(:tool_called)
+    # For this demo, converge when we have both analysis and validation
+    # (This example skips actual tool execution to demonstrate multi-model flow)
+    return false unless state.respond_to?(:progress)
+
+    analysis = state.snapshot[:analysis] || {}
+    validation = state.snapshot[:validation] || {}
+
+    # Converge when workflow has completed analysis and validation phases
+    !analysis.empty? && !validation.empty?
   end
 end
 
@@ -478,10 +487,35 @@ begin
     puts "  Summary: #{result[:summary]}" if result[:summary]
     puts
     puts "States visited: #{result[:fsm_history].map { |h| h[:to] }.join(" → ")}" if result[:fsm_history]
-    puts "Progress signals: #{agent_state.progress.signals.inspect}"
-    puts "  (Note: Agent converged when policy indicated completion)"
+    if agent_state.respond_to?(:progress)
+      puts "Progress signals: #{agent_state.progress.signals.inspect}"
+      puts "  (Note: Agent converged when policy indicated completion)"
+    end
   else
     puts "⚠️  Unexpected result type: #{result.class}"
+  end
+rescue AgentRuntime::ExecutionError => e
+  # Check if this is a validation block (expected behavior)
+  if e.message.include?("Signal blocked") || e.message.include?("violation")
+    puts
+    puts "=" * 70
+    puts "🛡️  Validation Blocked Signal (Expected Behavior)"
+    puts "=" * 70
+    puts
+    puts "The validation model (mistral:7b-instruct) analyzed the reasoning"
+    puts "and determined the signal should be BLOCKED based on validation rules."
+    puts
+    puts "This is correct behavior - the multi-model strategy is working as intended:"
+    puts "  1. Reasoning model analyzed the market"
+    puts "  2. Validation model checked against rules"
+    puts "  3. Validation model blocked the signal (preventing bad trades)"
+    puts
+    puts "Error details: #{e.message}"
+    puts "Progress signals: #{agent_state.progress.signals.inspect}" if agent_state.respond_to?(:progress)
+  else
+    puts
+    puts "❌ Execution Error: #{e.class}: #{e.message}"
+    puts e.backtrace.first(5).join("\n")
   end
 rescue StandardError => e
   puts
