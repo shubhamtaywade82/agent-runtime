@@ -3,6 +3,8 @@
 require "json"
 require "securerandom"
 
+require_relative "decision"
+
 module AgentRuntime
   # Agentic workflow implementation using formal FSM.
   #
@@ -103,9 +105,7 @@ module AgentRuntime
         end
 
         # Check for infinite loops
-        if @fsm.iteration_count > 100
-          raise "Max iterations exceeded"
-        end
+        raise "Max iterations exceeded" if @fsm.iteration_count > 100
       end
     end
 
@@ -261,11 +261,22 @@ module AgentRuntime
         end
 
         begin
+          # Validate tool call against phase constraints before execution
+          decision = Decision.new(action: action, params: params)
+          @policy.validate!(decision, state: @state)
+
           result = @tool_registry.call(action, params)
           tool_results << {
             tool_call_id: tool_call[:id] || tool_call["id"] || SecureRandom.hex(8),
             name: action,
             result: result
+          }
+        rescue PolicyViolation => e
+          # Phase constraint violation - include in results but don't execute
+          tool_results << {
+            tool_call_id: tool_call[:id] || tool_call["id"] || SecureRandom.hex(8),
+            name: action,
+            error: "Policy violation: #{e.message}"
           }
         rescue StandardError => e
           tool_results << {
@@ -297,6 +308,10 @@ module AgentRuntime
                       pending_tool_calls: nil
                     })
 
+      # Applications can mark progress signals in their tools
+      # Example: state.progress.mark!(:patch_applied) in a coding tool
+      # The runtime does not interpret these signals; applications define convergence
+
       @fsm.transition_to(FSM::STATES[:LOOP_CHECK], reason: "Tools executed, #{tool_results.size} results")
     end
 
@@ -315,6 +330,7 @@ module AgentRuntime
       end
 
       # Check convergence policy
+      # Applications define convergence logic in their Policy subclass
       if @policy.converged?(@state)
         @fsm.transition_to(FSM::STATES[:FINALIZE], reason: "Policy indicates convergence")
         return

@@ -5,15 +5,6 @@ require "spec_helper"
 # rubocop:disable RSpec/MultipleMemoizedHelpers
 RSpec.describe AgentRuntime::Agent do
   let(:mock_planner) { instance_double(AgentRuntime::Planner) }
-  let(:mock_policy) { instance_double(AgentRuntime::Policy) }
-  let(:mock_executor) { instance_double(AgentRuntime::Executor) }
-  let(:state) { AgentRuntime::State.new }
-  let(:audit_log) { instance_double(AgentRuntime::AuditLog) }
-
-  before do
-    allow(mock_policy).to receive(:converged?).and_return(false)
-  end
-
   let(:agent) do
     described_class.new(
       planner: mock_planner,
@@ -23,6 +14,14 @@ RSpec.describe AgentRuntime::Agent do
       audit_log: audit_log,
       max_iterations: 10
     )
+  end
+  let(:mock_policy) { instance_double(AgentRuntime::Policy) }
+  let(:mock_executor) { instance_double(AgentRuntime::Executor) }
+  let(:state) { AgentRuntime::State.new }
+  let(:audit_log) { instance_double(AgentRuntime::AuditLog) }
+
+  before do
+    allow(mock_policy).to receive(:converged?).and_return(false)
   end
 
   describe "#initialize" do

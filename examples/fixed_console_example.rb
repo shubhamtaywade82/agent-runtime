@@ -67,8 +67,15 @@ planner = AgentRuntime::Planner.new(
   }
 )
 
-# 4. Define policy
-policy = AgentRuntime::Policy.new
+# 4. Define convergence policy (prevents infinite loops)
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when a tool has been called
+    state.progress.include?(:tool_called)
+  end
+end
+
+policy = ConvergentPolicy.new
 
 # 5. Initialize state
 state = AgentRuntime::State.new
@@ -98,3 +105,5 @@ rescue StandardError => e
   puts "❌ Error: #{e.class}: #{e.message}"
   puts e.backtrace.first(5)
 end
+
+puts "\nProgress signals: #{state.progress.signals.inspect}"

@@ -11,7 +11,9 @@
 #   2. A model available (e.g., `ollama pull llama3.1:8b`)
 #
 # Usage:
-#   ruby examples/complete_working_example.rb
+#   bundle exec ruby examples/complete_working_example.rb
+#   Note: Use bundle exec to ensure you're using the local development version
+#         with all features (including progress tracking and convergence)
 
 require "agent_runtime"
 require "ollama_client"
@@ -158,11 +160,23 @@ puts
 # ============================================================================
 puts "⚙️  Step 6: Setting up policy, executor, and state..."
 
-policy = AgentRuntime::Policy.new
+# Create a convergence policy that halts after a tool is called
+# This demonstrates how to prevent infinite loops
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when a tool has been called (prevents infinite exploration)
+    # Check if progress tracking is available (backward compatibility)
+    return false unless state.respond_to?(:progress)
+
+    state.progress.include?(:tool_called)
+  end
+end
+
+policy = ConvergentPolicy.new
 executor = AgentRuntime::Executor.new(tool_registry: tools)
 state = AgentRuntime::State.new
 
-puts "✅ Components initialized"
+puts "✅ Components initialized (with convergence policy)"
 puts
 
 # ============================================================================
@@ -196,6 +210,10 @@ begin
   puts "✅ Success!"
   puts "Result: #{result.inspect}"
   puts "State after step: #{state.snapshot.keys.join(", ")}"
+  if state.respond_to?(:progress)
+    puts "Progress signals: #{state.progress.signals.inspect}"
+    puts "   (Convergence policy will halt agent when :tool_called signal is present)"
+  end
 rescue AgentRuntime::PolicyViolation => e
   puts "❌ Policy violation: #{e.message}"
 rescue AgentRuntime::ExecutionError => e
@@ -224,28 +242,76 @@ end
 puts
 
 # ============================================================================
-# TEST 3: Multi-step Workflow
+# TEST 3: Multi-step Workflow with Convergence
 # ============================================================================
-puts "\n📝 Test 3: Multi-step workflow - Agent#run"
+puts "\n📝 Test 3: Multi-step workflow - Agent#run with convergence"
 puts "-" * 70
 
 begin
+  # Create a fresh state for this demo
+  demo_state = AgentRuntime::State.new
+
+  # Check if progress tracking is available
+  has_progress = demo_state.respond_to?(:progress)
+
+  if has_progress
+    puts "   Using convergence policy: will halt after tool is called"
+  else
+    puts "   Progress tracking not available - using max_iterations safety limit"
+  end
+
   # Use lower max_iterations for demo purposes
   demo_agent = AgentRuntime::Agent.new(
     planner: planner,
     policy: policy,
     executor: executor,
-    state: AgentRuntime::State.new,
-    max_iterations: 3
+    state: demo_state,
+    max_iterations: 5 # Increased to allow tool call + convergence check
   )
 
-  result = demo_agent.run(initial_input: "Get the current time, then use the finish action")
-  puts "✅ Success!"
-  puts "Result: #{result.inspect}"
-  puts "Iterations: #{result[:iterations]}"
+  result = demo_agent.run(initial_input: "Get the current time")
+
+  # Check if agent converged successfully
+  # Convergence is detected by: progress signals OR low iteration count OR done flag
+  converged_by_policy = has_progress && demo_state.progress.include?(:tool_called)
+  iterations = result[:iterations] || 0
+  has_result_data = result.is_a?(Hash) && (result[:current_time] || result[:done] || result.keys.any?)
+  completed = result[:done] || converged_by_policy || (has_result_data && iterations < 5)
+
+  if completed
+    puts "✅ Success! Agent completed"
+    puts "Result: #{result.inspect}"
+    puts "Iterations: #{iterations}"
+    if has_progress
+      puts "Progress signals: #{demo_state.progress.signals.inspect}"
+      if converged_by_policy
+        puts "   ✓ Convergence policy halted agent after tool was called"
+      elsif result[:done]
+        puts "   (Agent completed via finish action)"
+      else
+        puts "   (Agent completed successfully)"
+      end
+    end
+  else
+    puts "⚠️  Agent did not complete (may have hit max iterations)"
+    puts "Result: #{result.inspect}"
+    puts "Iterations: #{iterations}"
+    if has_progress
+      puts "Progress signals: #{demo_state.progress.signals.inspect}"
+      puts "   (If progress tracking is available, convergence should prevent this)"
+    else
+      puts "   Run with 'bundle exec' to enable convergence-based halting"
+    end
+  end
 rescue AgentRuntime::MaxIterationsExceeded => e
   puts "⚠️  Max iterations exceeded: #{e.message}"
-  puts "   (This demonstrates the max_iterations safety mechanism)"
+  if demo_state.respond_to?(:progress)
+    puts "   Progress signals: #{demo_state.progress.signals.inspect}"
+    puts "   (Note: If progress tracking is available, convergence should prevent this)"
+  else
+    puts "   (This demonstrates the max_iterations safety mechanism)"
+    puts "   Run with 'bundle exec' to enable convergence-based halting"
+  end
 rescue StandardError => e
   puts "❌ Error: #{e.class}: #{e.message}"
 end
@@ -322,11 +388,14 @@ class ExampleAgentFSM < AgentRuntime::AgentFSM
   }.freeze
 end
 
+# Create a fresh state for FSM
+fsm_state = AgentRuntime::State.new
+
 agent_fsm = ExampleAgentFSM.new(
   planner: planner,
   policy: policy,
   executor: executor,
-  state: AgentRuntime::State.new, # Fresh state for FSM
+  state: fsm_state, # Fresh state for FSM
   tool_registry: tools,
   audit_log: AgentRuntime::AuditLog.new,
   max_iterations: 10
@@ -352,10 +421,14 @@ begin
     puts "✅ Success!"
     puts "Done: #{result[:done]}"
     puts "Iterations: #{result[:iterations]}" if result[:iterations]
-    if result[:fsm_history]
-      puts "FSM States visited: #{result[:fsm_history].map { |h| h[:to] }.uniq.length}"
-    end
+    puts "FSM States visited: #{result[:fsm_history].map { |h| h[:to] }.uniq.length}" if result[:fsm_history]
     puts "Final state keys: #{result[:state].keys.join(", ")}" if result[:state]
+    if fsm_state.respond_to?(:progress)
+      puts "Progress signals: #{fsm_state.progress.signals.inspect}"
+      puts "   (Note: FSM converged when policy indicated completion)"
+    else
+      puts "   (Note: FSM completed workflow successfully)"
+    end
   else
     puts "⚠️  Unexpected result type: #{result.class}"
   end

@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# rubocop:disable Naming/PredicateMethod, Lint/DuplicateBranch
+# rubocop:disable Naming/PredicateMethod
 # End-to-End Test Script for AgentRuntime
 #
 # This script tests the agent-runtime gem with real Ollama connections.
@@ -759,7 +759,7 @@ begin
     attr_reader :entries
 
     def initialize
-      super()
+      super
       @entries = []
     end
 
@@ -802,11 +802,11 @@ puts_header("Test 13: Tool Exception Handling")
 
 begin
   broken_tools = AgentRuntime::ToolRegistry.new({
-                                                   "broken" => lambda do |**_kwargs|
-                                                     raise StandardError, "Database connection failed"
-                                                   end,
-                                                   "search" => ->(query:) { { result: "Found: #{query}" } }
-                                                 })
+                                                  "broken" => lambda do |**_kwargs|
+                                                    raise StandardError, "Database connection failed"
+                                                  end,
+                                                  "search" => ->(query:) { { result: "Found: #{query}" } }
+                                                })
 
   agent = AgentRuntime::Agent.new(
     planner: planner,
@@ -880,7 +880,7 @@ begin
   iteration_tracker = []
   custom_builder = lambda do |result, iteration|
     iteration_tracker << iteration
-    "Iteration #{iteration}: Continue based on #{result.keys.join(', ')}"
+    "Iteration #{iteration}: Continue based on #{result.keys.join(", ")}"
   end
 
   agent = AgentRuntime::Agent.new(
@@ -998,8 +998,6 @@ begin
                     response.to_h
                   elsif response.is_a?(Hash)
                     response
-                  else
-                    nil
                   end
 
   if response_hash && (response_hash[:message] || response_hash["message"] || response_hash.key?(:content))
@@ -1037,8 +1035,8 @@ begin
 
   if result_nil.is_a?(Hash) && result_empty.is_a?(Hash)
     results.record(true, "Empty and nil parameters handling")
-    puts_verbose("Nil params result: #{result_nil.keys.join(', ')}")
-    puts_verbose("Empty params result: #{result_empty.keys.join(', ')}")
+    puts_verbose("Nil params result: #{result_nil.keys.join(", ")}")
+    puts_verbose("Empty params result: #{result_empty.keys.join(", ")}")
   else
     results.record(false, "Empty and nil parameters handling")
     puts_error("Expected Hash results for both nil and empty params")
@@ -1055,13 +1053,13 @@ puts_header("Test 19: Symbol vs String Tool Keys")
 
 begin
   mixed_tools = AgentRuntime::ToolRegistry.new({
-                                                  :symbol_search => lambda do |query:|
-                                                    { result: "Symbol: #{query}" }
-                                                  end,
-                                                  "string_calculate" => lambda do |expression:|
-                                                    { result: eval(expression) }
-                                                  end
-                                                })
+                                                 :symbol_search => lambda do |query:|
+                                                   { result: "Symbol: #{query}" }
+                                                 end,
+                                                 "string_calculate" => lambda do |expression:|
+                                                   { result: eval(expression) }
+                                                 end
+                                               })
 
   puts_info("Testing tool registry with mixed symbol and string keys...")
 
@@ -1168,4 +1166,4 @@ else
   exit 1
 end
 
-# rubocop:enable Naming/PredicateMethod, Lint/DuplicateBranch
+# rubocop:enable Naming/PredicateMethod

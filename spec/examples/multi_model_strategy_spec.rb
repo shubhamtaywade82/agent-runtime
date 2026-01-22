@@ -200,9 +200,9 @@ RSpec.describe "Multi-Model Strategy Example Usage", type: :integration do
         @fsm.transition_to(AgentRuntime::FSM::STATES[:EXECUTE], reason: "Signal validated")
       else
         @fsm.transition_to(AgentRuntime::FSM::STATES[:HALT],
-                          reason: "Signal blocked: #{decision[:reason]}")
+                           reason: "Signal blocked: #{decision[:reason]}")
       end
-    rescue StandardError => e
+    rescue StandardError
       @fsm.transition_to(AgentRuntime::FSM::STATES[:HALT], reason: "Validation failed")
     end
 
@@ -215,14 +215,16 @@ RSpec.describe "Multi-Model Strategy Example Usage", type: :integration do
       analysis = @state.snapshot[:analysis] || {}
       validation = @state.snapshot[:validation] || {}
 
-      return {
-        done: true,
-        analysis: analysis,
-        validation: validation,
-        summary: "N/A - workflow halted before completion",
-        iterations: @fsm.iteration_count,
-        fsm_history: @fsm.history
-      } if analysis.empty? || validation.empty?
+      if analysis.empty? || validation.empty?
+        return {
+          done: true,
+          analysis: analysis,
+          validation: validation,
+          summary: "N/A - workflow halted before completion",
+          iterations: @fsm.iteration_count,
+          fsm_history: @fsm.history
+        }
+      end
 
       summary_prompt = <<~PROMPT
         Summarize this trading decision in 1-2 lines for Telegram:

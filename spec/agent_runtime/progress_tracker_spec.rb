@@ -11,13 +11,13 @@ RSpec.describe AgentRuntime::ProgressTracker do
     end
 
     it "initializes with provided signals" do
-      tracker = described_class.new([:signal_a, :signal_b])
+      tracker = described_class.new(%i[signal_a signal_b])
       expect(tracker.include?(:signal_a)).to be true
       expect(tracker.include?(:signal_b)).to be true
     end
 
     it "converts string signals to symbols" do
-      tracker = described_class.new(["signal_a", "signal_b"])
+      tracker = described_class.new(%w[signal_a signal_b])
       expect(tracker.include?(:signal_a)).to be true
       expect(tracker.include?(:signal_b)).to be true
     end
@@ -63,7 +63,7 @@ RSpec.describe AgentRuntime::ProgressTracker do
     end
 
     it "checks multiple signals (all must be present)" do
-      tracker = described_class.new([:signal_a, :signal_b])
+      tracker = described_class.new(%i[signal_a signal_b])
       expect(tracker.include?(:signal_a, :signal_b)).to be true
       expect(tracker.include?(:signal_a, :signal_c)).to be false
     end
@@ -102,7 +102,7 @@ RSpec.describe AgentRuntime::ProgressTracker do
 
   describe "#clear" do
     it "removes all signals" do
-      tracker = described_class.new([:signal_a, :signal_b])
+      tracker = described_class.new(%i[signal_a signal_b])
       tracker.clear
       expect(tracker.empty?).to be true
       expect(tracker.signals).to eq([])
@@ -111,7 +111,7 @@ RSpec.describe AgentRuntime::ProgressTracker do
 
   describe "#snapshot" do
     it "returns a copy of current signals" do
-      tracker = described_class.new([:signal_a, :signal_b])
+      tracker = described_class.new(%i[signal_a signal_b])
       snapshot = tracker.snapshot
       expect(snapshot).to contain_exactly(:signal_a, :signal_b)
       expect(snapshot).not_to be(tracker.signals)

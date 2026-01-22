@@ -178,12 +178,21 @@ planner = AgentRuntime::Planner.new(
   }
 )
 
-# 4. Create agent
+# 4. Create convergence policy (prevents infinite loops)
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when a tool has been called
+    state.progress.include?(:tool_called)
+  end
+end
+
+# 5. Create agent
+agent_state = AgentRuntime::State.new
 agent = AgentRuntime::Agent.new(
   planner: planner,
   executor: AgentRuntime::Executor.new(tool_registry: tools),
-  policy: AgentRuntime::Policy.new,
-  state: AgentRuntime::State.new,
+  policy: ConvergentPolicy.new,
+  state: agent_state,
   audit_log: AgentRuntime::AuditLog.new
 )
 
@@ -208,6 +217,7 @@ test_cases.each do |test_input|
     result = agent.step(input: test_input)
     puts "\n✅ Success!"
     puts "Result: #{result.inspect}"
+    puts "Progress signals: #{agent_state.progress.signals.inspect}"
   rescue Ollama::RetryExhaustedError => e
     puts "\n❌ Ollama server error: #{e.message}"
     puts "Make sure Ollama server is running: ollama serve"

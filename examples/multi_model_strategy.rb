@@ -25,7 +25,7 @@ require "ollama_client"
 # Model names - can be overridden via environment variables
 # Defaults use models available in your Ollama server
 REASONING_MODEL = ENV.fetch("REASONING_MODEL", "llama3.1:8b")
-VALIDATION_MODEL = ENV.fetch("VALIDATION_MODEL", "mistral:7b-instruct")  # Strict validation model
+VALIDATION_MODEL = ENV.fetch("VALIDATION_MODEL", "mistral:7b-instruct") # Strict validation model
 EXPLANATION_MODEL = ENV.fetch("EXPLANATION_MODEL", "llama3.2:3b")
 
 puts "=" * 70
@@ -57,11 +57,11 @@ puts "📦 Step 1: Initializing multiple Ollama models..."
 # options: { temperature: X }, so we can share the client for chat calls.
 
 reasoning_config = Ollama::Config.new
-reasoning_config.temperature = 0.1  # Low temperature for reasoning
+reasoning_config.temperature = 0.1 # Low temperature for reasoning
 reasoning_client = Ollama::Client.new(config: reasoning_config)
 
 validation_config = Ollama::Config.new
-validation_config.temperature = 0.0  # Absolute determinism for validation
+validation_config.temperature = 0.0 # Absolute determinism for validation
 validation_client = Ollama::Client.new(config: validation_config)
 
 # Explanation client can be shared since we'll pass temperature via options
@@ -269,11 +269,11 @@ puts "🤖 Step 5: Creating multi-model FSM agent..."
 class MultiModelAgentFSM < AgentRuntime::AgentFSM
   attr_accessor :reasoning_planner, :validation_planner, :explanation_planner
 
-  def initialize(reasoning_planner:, validation_planner:, explanation_planner:, **opts)
+  def initialize(reasoning_planner:, validation_planner:, explanation_planner:, **)
     @reasoning_planner = reasoning_planner
     @validation_planner = validation_planner
     @explanation_planner = explanation_planner
-    super(**opts)
+    super(**)
   end
 
   # Override PLAN state to use reasoning model
@@ -423,14 +423,23 @@ class MultiModelAgentFSM < AgentRuntime::AgentFSM
   end
 end
 
+# Create convergence policy (prevents infinite loops)
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when a tool has been called
+    state.progress.include?(:tool_called)
+  end
+end
+
+agent_state = AgentRuntime::State.new
 agent = MultiModelAgentFSM.new(
   reasoning_planner: reasoning_planner,
   validation_planner: validation_planner,
   explanation_planner: explanation_planner,
   planner: reasoning_planner, # Default planner
-  policy: AgentRuntime::Policy.new,
+  policy: ConvergentPolicy.new,
   executor: AgentRuntime::Executor.new(tool_registry: tools),
-  state: AgentRuntime::State.new,
+  state: agent_state,
   tool_registry: tools,
   max_iterations: 10
 )
@@ -465,12 +474,12 @@ begin
       puts "  Market Bias: #{result[:analysis][:market_bias]}"
       puts "  Regime: #{result[:analysis][:regime]}"
     end
-    if result[:validation]
-      puts "  Decision: #{result[:validation][:decision]}"
-    end
+    puts "  Decision: #{result[:validation][:decision]}" if result[:validation]
     puts "  Summary: #{result[:summary]}" if result[:summary]
     puts
-    puts "States visited: #{result[:fsm_history].map { |h| h[:to] }.join(' → ')}" if result[:fsm_history]
+    puts "States visited: #{result[:fsm_history].map { |h| h[:to] }.join(" → ")}" if result[:fsm_history]
+    puts "Progress signals: #{agent_state.progress.signals.inspect}"
+    puts "  (Note: Agent converged when policy indicated completion)"
   else
     puts "⚠️  Unexpected result type: #{result.class}"
   end

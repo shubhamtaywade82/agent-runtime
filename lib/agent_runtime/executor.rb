@@ -55,6 +55,8 @@ module AgentRuntime
         if state.is_a?(State)
           state.progress.mark!(:tool_called)
           state.progress.mark!(:step_completed)
+          # Applications can mark domain-specific signals in their tools
+          # Example: state.progress.mark!(:patch_applied) in a coding tool
         end
 
         result

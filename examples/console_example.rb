@@ -71,8 +71,18 @@ planner = AgentRuntime::Planner.new(
   }
 )
 
-# 4. Create policy
-policy = AgentRuntime::Policy.new
+# 4. Create convergence policy (prevents infinite loops)
+class ConvergentPolicy < AgentRuntime::Policy
+  def converged?(state)
+    # Converge when a tool has been called
+    # Check if progress tracking is available (backward compatibility)
+    return false unless state.respond_to?(:progress)
+
+    state.progress.include?(:tool_called)
+  end
+end
+
+policy = ConvergentPolicy.new
 
 # 5. Create executor
 executor = AgentRuntime::Executor.new(tool_registry: tools)
@@ -95,7 +105,7 @@ puts "Testing Agent.step()"
 puts "=" * 60
 
 begin
-  result = agent.step(input: "Fetch market data for AAPL")
+  result = agent.step(input: "Fetch market data for NIFTY")
   puts "\n✅ Success!"
   puts "Result: #{result.inspect}"
 rescue Ollama::RetryExhaustedError => e
@@ -113,4 +123,8 @@ end
 puts "\n#{"=" * 60}"
 puts "Agent state after step:"
 puts state.snapshot.inspect
+if state.respond_to?(:progress)
+  puts "\nProgress signals: #{state.progress.signals.inspect}"
+  puts "   (Convergence policy will halt agent when :tool_called signal is present)"
+end
 puts "=" * 60
