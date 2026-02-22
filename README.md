@@ -127,9 +127,12 @@ planner = AgentRuntime::Planner.new(
   prompt_builder: ->(input:, state:) {
     "User request: #{input}\nContext: #{state.to_json}"
   },
-  think: true,        # Enable native reasoning for advanced models
-  temperature: 0.1    # All options automatically passed to Ollama execution
+  temperature: 0.1
 )
+
+# [!IMPORTANT]
+# The `think: true` parameter requires models with native CoT support (e.g., `deepseek-r1`).
+# Using it with `llama` or `qwen` models will return an `HTTP 400` error.
 
 agent = AgentRuntime::Agent.new(
   planner: planner,

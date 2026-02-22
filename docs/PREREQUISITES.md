@@ -255,6 +255,26 @@ The `ollama-client` gem also provides higher-level agent classes:
 
 However, `agent_runtime` uses the lower-level `Ollama::Client` directly for maximum flexibility and control.
 
+### Multimodal/Vision Models
+
+When using vision models like `qwen2-vl` or `llama3-vision`, images must be **Base64 encoded strings**.
+
+```ruby
+require "base64"
+
+image_data = File.read("image.jpg", mode: "rb")
+base64_image = Base64.strict_encode64(image_data)
+
+response = client.chat(
+  model: "qwen2-vl",
+  messages: [{
+    role: "user",
+    content: "What is in this image?",
+    images: [base64_image] # Pass encoded strings
+  }]
+)
+```
+
 ### Mock Client for Testing
 
 For testing without a real Ollama server:

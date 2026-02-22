@@ -1,4 +1,16 @@
-## [Unreleased]
+## [0.3.0] - 2026-02-22
+
+### Added
+- Native support for Model Context Protocol (MCP) in `ToolRegistry#register_mcp_client`
+- Enhanced support for JSON-RPC `initialize` handshake for remote MCP servers
+- Documentation for Multimodal/Vision model integration including Base64 requirements
+- Support for "Thinking" (Reasoning) models via `think: true` parameter in `Planner`
+- Multi-repository MCP bridge support using PTY-based `CLIStdioTransport`
+
+### Fixed
+- `ToolRegistry#call` now symbolizes all parameter keys, preventing `ArgumentError` during keyword argument expansion
+- `Executor#execute` now includes detailed logging for rescued exceptions
+- Fixed `Planner` parameter passing to ensure `options` are correctly prioritized for Ollama execution
 
 ## [0.2.0] - 2026-01-XX
 

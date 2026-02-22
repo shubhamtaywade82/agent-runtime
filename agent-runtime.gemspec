@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "agent_runtime"
-  spec.version = "0.2.0"
+  spec.version = "0.3.0"
   spec.authors = ["Shubham Taywade"]
   spec.email = ["shubhamtaywade82@gmail.com"]
 
