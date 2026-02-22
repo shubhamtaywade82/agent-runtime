@@ -64,6 +64,8 @@ This overview is informative only. The strict rules above are the contract.
 ## Prerequisites
 `agent_runtime` depends on `ollama-client`. See `PREREQUISITES.md`.
 
+For connecting to remote tools via the Model Context Protocol, see `docs/MCP_INTEGRATION.md`.
+
 ## Installation
 Add this line to your application's Gemfile:
 
