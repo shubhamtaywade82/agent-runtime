@@ -194,7 +194,7 @@ tools = AgentRuntime::ToolRegistry.new({
                                          end,
 
                                          "calculate" => lambda do |expression:|
-                                           result = eval(expression) # rubocop:disable Security/Eval
+                                           result = eval(expression)
                                            {
                                              result: result,
                                              expression: expression,

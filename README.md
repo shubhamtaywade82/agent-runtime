@@ -93,8 +93,14 @@ require "agent_runtime"
 require "ollama_client"
 
 tools = AgentRuntime::ToolRegistry.new({
-  "fetch" => ->(**args) { { data: "fetched", args: args } },
-  "execute" => ->(**args) { { result: "executed", args: args } }
+  "fetch" => {
+    callable: ->(ticker:) { { data: "fetched", ticker: ticker } },
+    schema: {
+      description: "Fetches market data",
+      properties: { ticker: { type: "string" } },
+      required: ["ticker"]
+    }
+  }
 })
 
 client = Ollama::Client.new
@@ -104,7 +110,11 @@ schema = {
   "required" => ["action", "params", "confidence"],
   "properties" => {
     "action" => { "type" => "string", "enum" => ["fetch", "execute", "finish"] },
-    "params" => { "type" => "object", "additionalProperties" => true },
+    "params" => {
+      "type" => "object",
+      "additionalProperties" => true,
+      "description" => "Parameters for the action. For 'fetch', YOU MUST provide {'ticker': 'AAPL'}."
+    },
     "confidence" => { "type" => "number", "minimum" => 0, "maximum" => 1 }
   }
 }
@@ -114,7 +124,9 @@ planner = AgentRuntime::Planner.new(
   schema: schema,
   prompt_builder: ->(input:, state:) {
     "User request: #{input}\nContext: #{state.to_json}"
-  }
+  },
+  think: true,        # Enable native reasoning for advanced models
+  temperature: 0.1    # All options automatically passed to Ollama execution
 )
 
 agent = AgentRuntime::Agent.new(
@@ -141,20 +153,10 @@ result = agent.run(initial_input: "Find best PDF library for Ruby")
 `AgentFSM` is the explicit FSM driver. It uses `/generate` for PLAN and
 `/chat` for EXECUTE. Tool execution happens only in OBSERVE.
 
-Tool calling in EXECUTE requires Ollama tool definitions. This gem does not
-auto-convert `ToolRegistry` entries to `Ollama::Tool` objects. If you need tool
-calling, subclass `AgentFSM` and return tool definitions from
-`build_tools_for_chat`.
+Tool calling in EXECUTE generates its JSON schemas completely natively based on the definitions you pass into the `ToolRegistry`. You no longer need to subclass anything or define Ollama structures manually.
 
 ```ruby
-class MyAgentFSM < AgentRuntime::AgentFSM
-  def build_tools_for_chat
-    # Return Ollama::Tool definitions here
-    []
-  end
-end
-
-agent_fsm = MyAgentFSM.new(
+agent_fsm = AgentRuntime::AgentFSM.new(
   planner: planner,
   policy: AgentRuntime::Policy.new,
   executor: AgentRuntime::Executor.new(tool_registry: tools),
@@ -164,6 +166,29 @@ agent_fsm = MyAgentFSM.new(
 )
 
 result = agent_fsm.run(initial_input: "Research Ruby memory management")
+```
+
+### Integrating with MCP (Model Context Protocol)
+`AgentRuntime` natively supports executing tools provided by any Model Context Protocol ([MCP](https://modelcontextprotocol.io)) server using the [Ruby MCP SDK](https://github.com/modelcontextprotocol/ruby-sdk)!
+
+To integrate, pass a connected `MCP::Client` directly into your `ToolRegistry` via `#register_mcp_client`. This automatically extracts all the remote tool schemas for the LLM and seamlessly routes execution events back through your MCP connection.
+
+```ruby
+require "agent_runtime"
+require "mcp"
+require "faraday" # Using an HTTP transport for the MCP client
+
+# 1. Connect to any remote or local MCP Server
+http_transport = MCP::Client::HTTP.new(url: "https://api.example.com/mcp")
+mcp_client = MCP::Client.new(transport: http_transport)
+
+# 2. Register the MCP tools natively into AgentRuntime
+tools = AgentRuntime::ToolRegistry.new
+tools.register_mcp_client(mcp_client)
+
+# 3. The LLM can now automatically inspect and call remote tools!
+agent_fsm = AgentRuntime::AgentFSM.new(tool_registry: tools, ...)
+agent_fsm.run(initial_input: "Use the remote tool to get me the weather!")
 ```
 
 ## Tool safety model

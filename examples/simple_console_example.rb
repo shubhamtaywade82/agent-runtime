@@ -44,7 +44,8 @@ schema = {
     },
     "params" => {
       "type" => "object",
-      "additionalProperties" => true
+      "additionalProperties" => true,
+      "description" => "Parameters for the action. For 'calculate', YOU MUST provide numerical 'a', 'b', and 'operation'."
     },
     "confidence" => {
       "type" => "number",

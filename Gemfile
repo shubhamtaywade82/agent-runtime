@@ -20,3 +20,5 @@ gem "rubocop-thread_safety"
 # DhanHQ integration for Indian market data (development only)
 gem "DhanHQ", git: "https://github.com/shubhamtaywade82/dhanhq-client.git", branch: "main", group: :development
 gem "dotenv", group: :development
+
+gem "mcp", "~> 0.7.1"

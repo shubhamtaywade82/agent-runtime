@@ -2,7 +2,6 @@
 
 require "spec_helper"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers
 RSpec.describe AgentRuntime::Agent do
   let(:mock_planner) { instance_double(AgentRuntime::Planner) }
   let(:agent) do
@@ -304,4 +303,3 @@ RSpec.describe AgentRuntime::Agent do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers

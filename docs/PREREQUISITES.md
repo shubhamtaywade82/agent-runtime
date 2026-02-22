@@ -59,15 +59,15 @@ client = Ollama::Client.new
 Your `Ollama::Client` instance must support:
 
 - `generate(prompt:, schema:)` - For PLAN state (single-shot, stateless)
-- `chat(messages:, allow_chat: true, ...)` - For simple chat responses
-- `chat_raw(messages:, tools:, allow_chat: true, ...)` - For tool calling (returns full response with `tool_calls`)
+- `chat(messages:, ...)` - For simple chat responses
+- `chat_raw(messages:, tools:, ...)` - For tool calling (returns full response with `tool_calls`)
 
 The `ollama-client` gem provides all methods with proper error handling, retries, and schema validation.
 
 **Important:** For tool calling, use `chat_raw()` to get the complete response including `tool_calls`:
 ```ruby
-response = client.chat_raw(messages: messages, tools: tools, allow_chat: true)
-tool_calls = response.dig("message", "tool_calls")
+response = client.chat_raw(messages: messages, tools: tools)
+tool_calls = response.message.tool_calls
 ```
 
 ### API Mapping
@@ -75,7 +75,7 @@ tool_calls = response.dig("message", "tool_calls")
 | AgentRuntime State | Ollama::Client Method | Endpoint | Purpose |
 |-------------------|----------------------|----------|---------|
 | PLAN              | `generate(prompt:, schema:)` | `/api/generate` | Single-shot planning |
-| EXECUTE           | `chat_raw(messages:, tools:, allow_chat: true)` | `/api/chat` | Tool calling with full response |
+| EXECUTE           | `chat(messages:, tools:)` | `/api/chat` | Tool calling with full response |
 
 ### Example: Complete Setup
 
@@ -269,7 +269,7 @@ class MockOllamaClient
     }
   end
 
-  def chat(messages:, allow_chat: false, **kwargs)
+  def chat(messages:, **kwargs)
     { "content" => "Mock response" }
   end
 end

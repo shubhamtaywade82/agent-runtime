@@ -39,7 +39,7 @@ planner = AgentRuntime::Planner.new(
       "params" => {
         "type" => "object",
         "additionalProperties" => true,
-        "description" => "Parameters for the action (any key-value pairs allowed)"
+        "description" => "Parameters for the action. For 'fetch', YOU MUST provide {'ticker': 'AAPL'}."
       },
       "confidence" => {
         "type" => "number",

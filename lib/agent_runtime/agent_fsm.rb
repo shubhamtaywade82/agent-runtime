@@ -244,6 +244,9 @@ module AgentRuntime
       parse_error = nil
 
       tool_calls.each do |tool_call|
+        # Coerce to hash if it's an object from Ollama::Response
+        tool_call = tool_call.to_h if tool_call.respond_to?(:to_h)
+
         # ollama-client tool_call format: { "function" => { "name" => "...", "arguments" => "..." } }
         function = tool_call[:function] || tool_call["function"] || {}
         action = function[:name] || function["name"] || tool_call[:name] || tool_call["name"]
@@ -429,18 +432,18 @@ module AgentRuntime
       tools_hash = @tool_registry.instance_variable_get(:@tools) || {}
       return [] if tools_hash.empty?
 
-      # Basic tool definition format for Ollama
-      # Users should override this method to provide proper JSON schemas for each tool
       tools_hash.keys.map do |tool_name|
+        schema = @tool_registry.schema_for(tool_name)
+
         {
           type: "function",
           function: {
             name: tool_name.to_s,
-            description: "Tool: #{tool_name}",
+            description: schema[:description] || schema["description"] || "Tool: #{tool_name}",
             parameters: {
               type: "object",
-              properties: {},
-              additionalProperties: true
+              properties: schema[:properties] || schema["properties"] || {},
+              required: schema[:required] || schema["required"] || []
             }
           }
         }
@@ -456,18 +459,18 @@ module AgentRuntime
     # @param response [Hash, Object] The chat_raw response (may be hash or object with tool_calls method)
     # @return [Array] Array of tool call hashes, empty array if none found
     def extract_tool_calls(response)
+      return response.message.tool_calls || [] if response.respond_to?(:message) && response.message
+
       if response.is_a?(Hash)
-        # ollama-client chat_raw returns tool_calls in message.tool_calls
         tool_calls = response.dig(:message, :tool_calls) || response.dig("message", "tool_calls")
         return tool_calls if tool_calls.is_a?(Array) && !tool_calls.empty?
 
-        # Fallback: check other possible locations
-        response[:tool_calls] || response["tool_calls"] || []
+        return response[:tool_calls] || response["tool_calls"] || []
       elsif response.respond_to?(:tool_calls)
-        response.tool_calls
-      else
-        []
+        return response.tool_calls || []
       end
+
+      []
     end
   end
 end

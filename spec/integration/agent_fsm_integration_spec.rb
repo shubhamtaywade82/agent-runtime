@@ -3,7 +3,7 @@
 require "spec_helper"
 require "json"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "AgentFSM Integration", type: :integration do
   let(:mock_client) { instance_double(Ollama::Client) }
   let(:schema) do
@@ -194,4 +194,4 @@ RSpec.describe "AgentFSM Integration", type: :integration do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:enable RSpec/DescribeClass

@@ -238,7 +238,7 @@ end
 
 # 5. Create agent
 agent_state = AgentRuntime::State.new
-agent = AgentRuntime::Agent.new(
+AgentRuntime::Agent.new(
   planner: planner,
   executor: AgentRuntime::Executor.new(tool_registry: tools),
   policy: ConvergentPolicy.new,

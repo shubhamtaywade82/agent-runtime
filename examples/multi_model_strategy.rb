@@ -496,8 +496,8 @@ begin
   end
 rescue AgentRuntime::ExecutionError => e
   # Check if this is a validation block (expected behavior)
+  puts
   if e.message.include?("Signal blocked") || e.message.include?("violation")
-    puts
     puts "=" * 70
     puts "🛡️  Validation Blocked Signal (Expected Behavior)"
     puts "=" * 70
@@ -513,7 +513,6 @@ rescue AgentRuntime::ExecutionError => e
     puts "Error details: #{e.message}"
     puts "Progress signals: #{agent_state.progress.signals.inspect}" if agent_state.respond_to?(:progress)
   else
-    puts
     puts "❌ Execution Error: #{e.class}: #{e.message}"
     puts e.backtrace.first(5).join("\n")
   end

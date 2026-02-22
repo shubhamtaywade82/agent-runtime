@@ -3,7 +3,7 @@
 require "spec_helper"
 require "json"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Multi-Model Strategy Example Usage", type: :integration do
   # This spec tests the usage pattern demonstrated in examples/multi_model_strategy.rb
   # It verifies that the multi-model strategy works correctly with different models
@@ -552,4 +552,4 @@ RSpec.describe "Multi-Model Strategy Example Usage", type: :integration do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:enable RSpec/DescribeClass

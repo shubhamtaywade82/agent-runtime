@@ -3,7 +3,6 @@
 require "spec_helper"
 require "json"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers
 RSpec.describe AgentRuntime::AgentFSM do
   let(:mock_planner) { instance_double(AgentRuntime::Planner) }
   let(:agent_fsm) do
@@ -928,4 +927,3 @@ RSpec.describe AgentRuntime::AgentFSM do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers

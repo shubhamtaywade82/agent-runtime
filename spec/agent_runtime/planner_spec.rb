@@ -45,32 +45,33 @@ RSpec.describe AgentRuntime::Planner do
   describe "#chat" do
     it "calls client.chat with messages" do
       messages = [{ role: "user", content: "Hello" }]
-      allow(mock_client).to receive(:chat).and_return({ "content" => "Hi" })
+      response = Ollama::Response.new({ "message" => { "content" => "Hi" } })
+      allow(mock_client).to receive(:chat).and_return(response)
 
       result = planner.chat(messages: messages)
 
       expect(mock_client).to have_received(:chat).with(
         messages: messages,
         tools: nil,
-        allow_chat: true
+        options: {}
       )
-      expect(result).to eq({ "content" => "Hi" })
+      expect(result).to eq("Hi")
     end
   end
 
   describe "#chat_raw" do
-    it "calls client.chat_raw with messages and tools" do
+    it "calls client.chat with messages and tools" do
       messages = [{ role: "user", content: "Hello" }]
       tools = []
-      response = { "message" => { "content" => "Hi", "tool_calls" => [] } }
-      allow(mock_client).to receive(:chat_raw).and_return(response)
+      response = Ollama::Response.new({ "message" => { "content" => "Hi", "tool_calls" => [] } })
+      allow(mock_client).to receive(:chat).and_return(response)
 
       result = planner.chat_raw(messages: messages, tools: tools)
 
-      expect(mock_client).to have_received(:chat_raw).with(
+      expect(mock_client).to have_received(:chat).with(
         messages: messages,
         tools: tools,
-        allow_chat: true
+        options: {}
       )
       expect(result).to eq(response)
     end
@@ -123,42 +124,44 @@ RSpec.describe AgentRuntime::Planner do
     end
 
     it "handles chat with empty messages array" do
-      allow(mock_client).to receive(:chat).and_return({ "content" => "" })
+      response = Ollama::Response.new({ "message" => { "content" => "" } })
+      allow(mock_client).to receive(:chat).and_return(response)
 
       planner.chat(messages: [])
 
       expect(mock_client).to have_received(:chat).with(
         messages: [],
         tools: nil,
-        allow_chat: true
+        options: {}
       )
     end
 
     it "handles chat with nil tools" do
       messages = [{ role: "user", content: "Hello" }]
-      allow(mock_client).to receive(:chat).and_return({ "content" => "Hi" })
+      response = Ollama::Response.new({ "message" => { "content" => "Hi" } })
+      allow(mock_client).to receive(:chat).and_return(response)
 
       planner.chat(messages: messages, tools: nil)
 
       expect(mock_client).to have_received(:chat).with(
         messages: messages,
         tools: nil,
-        allow_chat: true
+        options: {}
       )
     end
 
     it "handles chat_raw with tool calls" do
       messages = [{ role: "user", content: "Search" }]
       tools = [{ type: "function", function: { name: "search" } }]
-      response = {
-        "message" => {
-          "content" => "",
-          "tool_calls" => [
-            { "function" => { "name" => "search", "arguments" => '{"query":"test"}' } }
-          ]
-        }
-      }
-      allow(mock_client).to receive(:chat_raw).and_return(response)
+      response = Ollama::Response.new({
+                                        "message" => {
+                                          "content" => "",
+                                          "tool_calls" => [
+                                            { "function" => { "name" => "search", "arguments" => '{"query":"test"}' } }
+                                          ]
+                                        }
+                                      })
+      allow(mock_client).to receive(:chat).and_return(response)
 
       result = planner.chat_raw(messages: messages, tools: tools)
 
@@ -196,7 +199,8 @@ RSpec.describe AgentRuntime::Planner do
 
       expect(mock_client).to have_received(:generate).with(
         prompt: "Input: test, State: {:step=>1}",
-        schema: schema
+        schema: schema,
+        options: {}
       )
     end
   end

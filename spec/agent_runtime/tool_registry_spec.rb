@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "mcp"
 
 RSpec.describe AgentRuntime::ToolRegistry do
   let(:tools) do
@@ -8,6 +9,34 @@ RSpec.describe AgentRuntime::ToolRegistry do
                           "fetch" => ->(**args) { { data: "fetched", args: args } },
                           "execute" => ->(**_args) { { result: "executed" } }
                         })
+  end
+
+  describe "#register_mcp_client" do
+    let(:mcp_tool) do
+      instance_double(MCP::Client::Tool,
+                      name: "remote_tool",
+                      description: "A remote tool",
+                      input_schema: { "type" => "object", "properties" => {} })
+    end
+    let(:mcp_client) do
+      instance_double(MCP::Client, tools: [mcp_tool])
+    end
+
+    it "registers tools from an MCP client" do
+      registry = described_class.new
+      registered = registry.register_mcp_client(mcp_client)
+
+      expect(registered).to eq(["remote_tool"])
+
+      schema = registry.schema_for("remote_tool")
+      expect(schema["description"]).to eq("A remote tool")
+
+      allow(mcp_client).to receive(:call_tool).with(tool: mcp_tool,
+                                                    arguments: { arg: 1 }).and_return({ result: "success" })
+
+      result = registry.call("remote_tool", { arg: 1 })
+      expect(result).to eq({ result: "success" })
+    end
   end
 
   describe "#call" do

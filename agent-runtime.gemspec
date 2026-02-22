@@ -16,6 +16,7 @@ Gem::Specification.new do |spec|
   spec.files = Dir["lib/**/*", "README.md", "LICENSE.txt", "CHANGELOG.md"]
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "ollama-client", ">= 0.1.0"
+  spec.add_dependency "mcp", ">= 0.7.0"
+  spec.add_dependency "ollama-client", ">= 1.0.0"
   spec.metadata["rubygems_mfa_required"] = "true"
 end

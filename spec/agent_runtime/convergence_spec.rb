@@ -2,7 +2,6 @@
 
 require "spec_helper"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers
 RSpec.describe "AgentRuntime Convergence" do
   let(:mock_client) { instance_double(Ollama::Client) }
   let(:schema) do
@@ -204,4 +203,3 @@ RSpec.describe "AgentRuntime Convergence" do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers

@@ -3,7 +3,7 @@
 require "spec_helper"
 require "json"
 
-# rubocop:disable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:disable RSpec/DescribeClass
 RSpec.describe "Complete Working Example Usage", type: :integration do
   # This spec tests the usage pattern demonstrated in examples/complete_working_example.rb
   # It verifies that the basic Agent and AgentFSM usage patterns work correctly.
@@ -471,4 +471,4 @@ RSpec.describe "Complete Working Example Usage", type: :integration do
     end
   end
 end
-# rubocop:enable RSpec/MultipleMemoizedHelpers, RSpec/DescribeClass
+# rubocop:enable RSpec/DescribeClass

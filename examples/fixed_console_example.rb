@@ -31,7 +31,7 @@ schema = {
     "params" => {
       "type" => "object",
       "additionalProperties" => true, # CRITICAL: Allows LLM to add any properties
-      "description" => "Parameters for the action (any key-value pairs allowed)"
+      "description" => "Parameters for the action. For 'fetch', YOU MUST provide {'ticker': 'AAPL'}."
     },
     "confidence" => {
       "type" => "number",

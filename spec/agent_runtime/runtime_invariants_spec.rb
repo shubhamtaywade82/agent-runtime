@@ -86,24 +86,24 @@ RSpec.describe "AgentRuntime Runtime Invariants" do
 
       # Mock generate for PLAN state
 
-      # Mock chat_raw to always return tool calls
+      tool_call = {
+        "id" => "1",
+        "function" => {
+          "name" => "always_loop",
+          "arguments" => "{}"
+        }
+      }
+      chat_response = Ollama::Response.new({
+                                             "message" => {
+                                               "content" => "",
+                                               "tool_calls" => [tool_call]
+                                             }
+                                           })
+
       allow(mock_client).to receive_messages(generate: {
                                                "action" => "always_loop",
                                                "params" => { "goal" => "Loop" }
-                                             }, chat_raw: {
-                                               message: {
-                                                 content: "",
-                                                 tool_calls: [
-                                                   {
-                                                     id: "1",
-                                                     function: {
-                                                       name: "always_loop",
-                                                       arguments: "{}"
-                                                     }
-                                                   }
-                                                 ]
-                                               }
-                                             })
+                                             }, chat: chat_response)
 
       agent_fsm = AgentRuntime::AgentFSM.new(
         planner: planner,
@@ -193,31 +193,30 @@ RSpec.describe "AgentRuntime Runtime Invariants" do
 
       # First EXECUTE call returns tool, subsequent calls return no tools (converged)
       call_count = 0
-      allow(mock_client).to receive(:chat_raw) do
+      allow(mock_client).to receive(:chat) do
         call_count += 1
         if call_count == 1
           # First call: return tool call
-          {
-            message: {
-              content: "",
-              tool_calls: [
-                {
-                  id: "1",
-                  function: {
-                    name: "always_loop",
-                    arguments: "{}"
-                  }
-                }
-              ]
+          tool_call = {
+            "id" => "1",
+            "function" => {
+              "name" => "always_loop",
+              "arguments" => "{}"
             }
           }
+          Ollama::Response.new({
+                                 "message" => {
+                                   "content" => "",
+                                   "tool_calls" => [tool_call]
+                                 }
+                               })
         else
           # Subsequent calls: no tools (shouldn't happen if convergence works)
-          {
-            message: {
-              content: "Done"
-            }
-          }
+          Ollama::Response.new({
+                                 "message" => {
+                                   "content" => "Done"
+                                 }
+                               })
         end
       end
 
