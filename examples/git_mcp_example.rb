@@ -14,6 +14,7 @@ class CLIStdioTransport
     @out, @in, @pid = PTY.spawn(*cmd)
 
     # We must swallow the initial boot logs to sync up the json streams!
+    # rubocop:disable ThreadSafety/NewThread
     Thread.new do
       loop do
         line = @out.gets
@@ -22,6 +23,7 @@ class CLIStdioTransport
         break
       end
     end.join(5) # Give it 5s to boot
+    # rubocop:enable ThreadSafety/NewThread
   end
 
   def send_request(request:)
@@ -32,38 +34,9 @@ class CLIStdioTransport
     # Notifications do not receive responses
     return nil if request[:method]&.start_with?("notifications/")
 
-    # Block until the node server responds with an actual JSON-RPC result
-    begin
-      response = nil
-      loop do
-        line = @out.gets
-        next if line.nil? || line.strip.empty?
-        # PTY sometimes echos the input command back to stdout, filter it out
-        next if line.include?("jsonrpc") && !line.start_with?("{")
-
-        # Only accept properly formatted JSON responses
-        next unless line.start_with?("{")
-
-        begin
-          parsed = JSON.parse(line)
-          # Make sure this isn't just PTY echoing our STDIN back to us (no result/error)
-          if parsed.key?("result") || parsed.key?("error")
-            response = parsed
-            break
-          end
-        rescue JSON::ParserError
-          # Not valid json, keep waiting
-        end
-      end
-
-      raise "No response from MCP server" if response.nil?
-
-      puts "[send_request] IN: #{response.to_json}" if ENV["DEBUG_MCP"]
-      response
-    rescue Errno::EIO
-      warn "MCP Server exited prematurely."
-      raise "No response from MCP server"
-    end
+    response = read_response
+    puts "[send_request] IN: #{response.to_json}" if ENV["DEBUG_MCP"]
+    response
   rescue StandardError => e
     warn "Failed to communicate with remote MCP server: #{e.message}"
     raise e
@@ -73,6 +46,36 @@ class CLIStdioTransport
     @in.close
     @out.close
     Process.kill("KILL", @pid) if @pid
+  end
+
+  private
+
+  def read_response
+    loop do
+      line = @out.gets
+      raise "No response from MCP server" if line.nil?
+      next if line.strip.empty?
+
+      # PTY sometimes echos the input command back to stdout, filter it out
+      next if line.include?("jsonrpc") && !line.start_with?("{")
+      next unless line.start_with?("{")
+
+      result = parse_json_rpc(line)
+      return result if result
+    end
+  rescue Errno::EIO
+    warn "MCP Server exited prematurely."
+    raise "No response from MCP server"
+  end
+
+  def parse_json_rpc(line)
+    parsed = JSON.parse(line)
+    # Make sure this isn't just PTY echoing our STDIN back to us (must have result/error)
+    return parsed if parsed.key?("result") || parsed.key?("error")
+
+    nil
+  rescue JSON::ParserError
+    nil
   end
 end
 
@@ -98,23 +101,23 @@ REPOSITORIES.each do |repo_url|
     mcp_client = MCP::Client.new(transport: transport)
 
     init_response = transport.send_request(request: {
-      jsonrpc: "2.0",
-      id: "init-#{repo_name}",
-      method: "initialize",
-      params: {
-        protocolVersion: "2024-11-05",
-        capabilities: {},
-        clientInfo: { name: "AgentRuntime", version: "1.0.0" }
-      }
-    })
+                                             jsonrpc: "2.0",
+                                             id: "init-#{repo_name}",
+                                             method: "initialize",
+                                             params: {
+                                               protocolVersion: "2024-11-05",
+                                               capabilities: {},
+                                               clientInfo: { name: "AgentRuntime", version: "1.0.0" }
+                                             }
+                                           })
 
     transport.send_request(request: {
-      jsonrpc: "2.0",
-      method: "notifications/initialized"
-    })
+                             jsonrpc: "2.0",
+                             method: "notifications/initialized"
+                           })
 
     registered = tools.register_mcp_client(mcp_client)
-    puts "✅ Handshook #{init_response.dig('result', 'serverInfo', 'name')} and registered #{registered.size} tools."
+    puts "✅ Handshook #{init_response.dig("result", "serverInfo", "name")} and registered #{registered.size} tools."
   rescue StandardError => e
     warn "❌ Failed to connect to #{repo_name}: #{e.message}"
   end
@@ -175,7 +178,7 @@ agent = AgentRuntime::AgentFSM.new(
         2. Do NOT construct or guess GitHub URLs for 'fetch_generic_url_content'.
         3. Output ONLY valid JSON action payloads. No conversational filler.
 
-        AVAILABLE TOOLS: #{remote_tool_names.join(', ')}
+        AVAILABLE TOOLS: #{remote_tool_names.join(", ")}
 
         CURRENT STATE: #{state.to_json}
       PROMPT

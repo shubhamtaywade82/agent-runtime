@@ -1,5 +1,8 @@
 # AgentRuntime
 
+[![CI Status](https://github.com/shubhamtaywade82/agent-runtime/actions/workflows/main.yml/badge.svg)](https://github.com/shubhamtaywade82/agent-runtime/actions/workflows/main.yml)
+[![RuboCop Status](https://img.shields.io/badge/code_style-rubocop-brightgreen.svg)](https://github.com/rubocop/rubocop)
+
 Deterministic, policy-driven runtime for tool-using LLM agents in Ruby.
 
 AgentRuntime is a control plane. It coordinates planning, policy validation,

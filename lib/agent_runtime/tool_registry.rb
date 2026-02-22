@@ -90,9 +90,7 @@ module AgentRuntime
       raise ToolNotFound, "Tool not found: #{action}" unless tool
 
       # Symbolize keys to ensure compatibility with ** keyword expansion
-      symbolized_params = params.each_with_object({}) do |(k, v), h|
-        h[k.to_sym] = v
-      end
+      symbolized_params = params.transform_keys(&:to_sym)
 
       tool.call(**symbolized_params)
     end

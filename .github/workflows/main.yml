@@ -1,29 +1,68 @@
-name: Ruby
+name: CI
 
 on:
   push:
-    branches:
-      - master
-
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
     strategy:
+      fail-fast: false
       matrix:
-        ruby:
-          - '3.3.4'
+        ruby: [ '3.2', '3.3', '3.4' ]
 
+    name: Spec (Ruby ${{ matrix.ruby }})
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
-        run: bundle exec rake
+      - name: Run tests
+        run: bundle exec rake spec
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint (RuboCop)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Run RuboCop
+        run: bundle exec rake rubocop
+
+  audit:
+    runs-on: ubuntu-latest
+    name: Security Audit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Install bundler-audit
+        run: gem install bundler-audit
+      - name: Run security audit
+        run: bundler-audit --update
+
+  build:
+    needs: [test, lint, audit]
+    runs-on: ubuntu-latest
+    name: Build Verification
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Build gem
+        run: rake build
